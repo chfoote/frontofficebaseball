@@ -39,7 +39,7 @@ begin
     ('621439', 'Byron', 'Buxton', 'Byron Buxton', 'OF', 975000, 2026),
     ('689414', 'Liam', 'Hicks', 'Liam Hicks', 'C', 250000, 2028),
     ('669127', 'Shea', 'Langeliers', 'Shea Langeliers', 'C', 250000, 2027),
-    ('592518', 'Manny', 'Machado', 'Manny Machado', '3B', 3750000, 2028),
+    ('592518', 'Manny', 'Machado', 'Manny Machado', 'DH', 3750000, 2028),
     ('650911', 'Cristopher', 'Sánchez', 'Cristopher Sánchez', 'SP', 4000000, 2030),
     ('554430', 'Zack', 'Wheeler', 'Zack Wheeler', 'SP', 3800000, 2027),
     ('543243', 'Sonny', 'Gray', 'Sonny Gray', 'SP', 2200000, 2026),
