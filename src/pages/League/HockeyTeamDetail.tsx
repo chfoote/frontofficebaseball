@@ -304,10 +304,9 @@ function Medal({ icon, value, label, years, tone }: { icon: string; value: numbe
     silver: "border-gray-300 bg-gray-100 text-gray-800 dark:border-gray-600 dark:bg-gray-500/10 dark:text-gray-200",
     bronze: "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300",
   };
-  return <div className={`rounded-lg border p-4 text-center ${styles[tone]}`}>
-    <span className="text-2xl" aria-label={label}>{icon}</span>
-    <p className="mt-1 text-lg font-semibold">{value}</p>
-    <p className="mt-1 min-h-4 text-xs font-medium opacity-80">{years.length ? years.join(", ") : "—"}</p>
+  return <div className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 ${styles[tone]}`}>
+    <span className="text-lg" aria-label={label}>{icon}</span>
+    <div className="min-w-0"><p className="text-xs font-black"><span className="mr-1 text-base">{value}</span>{label}</p><p className="truncate text-[9px] font-semibold opacity-70">{years.length ? years.join(", ") : "No finishes"}</p></div>
   </div>;
 }
 
@@ -377,7 +376,12 @@ function TrophyCase({
   const monthlyTrophies = monthlyPlayerTrophies.map((assignment) => ({ key: `monthly-honour-${assignment.id}`, name: assignment.award?.name || "Monthly Honour", year: assignment.season_year, award: assignment.award, player: assignment.player, monthIndex: assignment.month_index })).sort((a, b) => b.year - a.year || (b.monthIndex ?? -1) - (a.monthIndex ?? -1));
   const trophies = view === "seasonal" ? seasonalTrophies : monthlyTrophies;
 
-  return <section id="trophy-case" className="mt-6 scroll-mt-24 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4 dark:border-amber-500/30 dark:from-amber-500/10 dark:to-transparent sm:p-6">
+  return <details id="trophy-case" className="group mt-3 scroll-mt-24 overflow-hidden rounded-xl border border-amber-200 bg-amber-50/60 dark:border-amber-500/30 dark:bg-amber-500/5">
+    <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 marker:hidden">
+      <span className="flex min-w-0 items-center gap-3"><span className="text-xl">🏆</span><span className="min-w-0"><span className="block text-sm font-black text-gray-900 dark:text-white">Club Trophy Case</span><span className="block truncate text-[10px] font-semibold text-amber-700/70 dark:text-amber-300/70">{seasonalTrophies.length} seasonal · {monthlyTrophies.length} monthly honours</span></span></span>
+      <span className="shrink-0 text-xs font-black text-amber-700 group-open:hidden dark:text-amber-300">View honours ↓</span><span className="hidden shrink-0 text-xs font-black text-amber-700 group-open:inline dark:text-amber-300">Hide honours ↑</span>
+    </summary>
+    <div className="border-t border-amber-200 p-4 dark:border-amber-500/20 sm:p-5">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
       <p className="text-xs font-bold uppercase tracking-[0.2em] text-amber-700 dark:text-amber-300">Club honours</p>
@@ -400,7 +404,8 @@ function TrophyCase({
         </article>;
       })}
     </div> : <p className="mt-5 rounded-lg border border-dashed border-amber-300 p-5 text-center text-sm text-gray-500 dark:border-amber-500/30 dark:text-gray-400">{view === "monthly" ? "No monthly honours have been recorded for this team yet." : "No seasonal trophies have been recorded for this team yet."}</p>}
-  </section>;
+    </div>
+  </details>;
 }
 
 function CompactTable({ code, label, players, teamNames, teamLogos, note, awardsByPlayer, tradeBlockIds, livePlayerIds, renderInterest }: { code: string; label: string; players: PlayerSeasonWithRelations[]; teamNames: Map<string, string>; teamLogos: Map<string, string>; note: string; awardsByPlayer: Map<number, PlayerAward[]>; tradeBlockIds: Set<number>; livePlayerIds: Set<string>; renderInterest: (season: PlayerSeasonWithRelations) => React.ReactNode }) {
@@ -847,8 +852,7 @@ export default function HockeyTeamDetail() {
       <div className="h-2" style={{ background: `linear-gradient(90deg, ${displayTeam?.primary_color || "#1d4ed8"}, ${displayTeam?.secondary_color || "#f97316"})` }} />
       <div className="p-4 xl:p-6">
         <TeamIdentityCard team={displayTeam || team} season={selectedSeason} managerName={selectedManager?.manager_name || team.manager_name} />
-        <div className="mt-4 grid grid-cols-3 gap-3"><Medal icon="🥇" value={team.championships} label="Championships" years={finishYears(1)} tone="gold" /><Medal icon="🥈" value={team.runner_up_finishes} label="Runner-up finishes" years={finishYears(2)} tone="silver" /><Medal icon="🥉" value={team.third_place_finishes} label="Third-place finishes" years={finishYears(3)} tone="bronze" /></div>
-        <div className="mt-3 flex flex-wrap justify-end gap-3"><Link to={`/teams/${team.id}/farm-systems`} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700">🏒 View Farm Systems</Link><Link to={`/teams/${team.id}/records`} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700">📚 View Record Book</Link><a href="#trophy-case" className="inline-flex items-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600">🏆 View Trophy Case</a></div>
+        <div className="mt-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between"><div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-3"><Medal icon="🥇" value={team.championships} label="Championships" years={finishYears(1)} tone="gold" /><Medal icon="🥈" value={team.runner_up_finishes} label="Runner-up" years={finishYears(2)} tone="silver" /><Medal icon="🥉" value={team.third_place_finishes} label="Third place" years={finishYears(3)} tone="bronze" /></div><div className="flex shrink-0 flex-wrap gap-2"><Link to={`/teams/${team.abbreviation}/farm-systems`} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700">⚾ Farm Systems</Link><Link to={`/teams/${team.abbreviation}/records`} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-indigo-700">📚 Record Book</Link></div></div>
         <TrophyCase team={displayTeam || team} finishes={teamFinishes} playerAwards={playerAwards} teamSeasons={teamPlayerSeasons} awards={awardDefinitions} />
 
         <div className="mt-6 rounded-xl border border-gray-200 p-4 dark:border-gray-800">
