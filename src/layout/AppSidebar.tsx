@@ -73,11 +73,6 @@ const gmToolItems: NavItem[] = [
     path: "/front-office",
   },
   {
-    icon: <TeamsIcon />,
-    name: "GM Records",
-    path: "/gms",
-  },
-  {
     icon: <DashboardIcon />,
     name: "Roster Lab",
     path: "/roster-lab",
