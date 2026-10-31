@@ -29,9 +29,7 @@ import PlayerInterestButton from "./PlayerInterestButton";
 import { usePlayerTradeInterest } from "../../hooks/usePlayerTradeInterest";
 import { fetchBuyoutPenalties, type BuyoutPenalty } from "../../lib/buyouts";
 import { fetchRetentionAdjustments, type RetentionAdjustment } from "../../lib/retentions";
-import { useAuth } from "../../context/AuthContext";
-import { fetchUserTeamAssignment } from "../../lib/teamUserAssignments";
-import { fetchTeamLeadership, setTeamLeadershipSlot, type LeadershipSlot, type TeamLeadership } from "../../lib/teamLeadership";
+import { fetchTeamLeadership, type TeamLeadership } from "../../lib/teamLeadership";
 import PositionBadge from "../../components/hockey/PositionBadge";
 import InjuryDesignationBadge from "../../components/hockey/InjuryDesignationBadge";
 
@@ -540,22 +538,7 @@ function MultiYearView({
   </div>;
 }
 
-function TeamLeadershipEditor({ roster, leadership, disabled, onChange }: { roster: PlayerSeasonWithRelations[]; leadership: TeamLeadership[]; disabled: boolean; onChange: (slot: LeadershipSlot, playerSeasonId: number | null) => void }) {
-  const eligible = roster.filter((season) => activePositions.has(position(season) as never)).sort((a, b) => playerName(a).localeCompare(playerName(b)));
-  const selected = new Map(leadership.map((entry) => [entry.slot, entry.player_season_id]));
-  const slots: Array<[LeadershipSlot, string]> = [["C", "Captain"], ["A1", "Alternate Captain 1"], ["A2", "Alternate Captain 2"]];
-  return <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4 dark:border-amber-500/30 dark:bg-amber-500/[0.06]">
-    <div><h4 className="font-semibold text-gray-900 dark:text-white">Team Leadership</h4><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Choose one captain and two alternate captains for this season.</p></div>
-    <div className="mt-3 grid gap-3 md:grid-cols-3">{slots.map(([slot, label]) => {
-      const current = selected.get(slot) ?? "";
-      const chosenElsewhere = new Set([...selected.entries()].filter(([otherSlot]) => otherSlot !== slot).map(([, playerId]) => playerId));
-      return <label key={slot} className="text-xs font-semibold text-gray-700 dark:text-gray-300">{label}<select disabled={disabled} value={current} onChange={(event) => onChange(slot, event.target.value ? Number(event.target.value) : null)} className="mt-1 h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm disabled:cursor-wait disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900"><option value="">Unassigned</option>{eligible.map((season) => <option key={season.id} value={season.id} disabled={chosenElsewhere.has(season.id)}>{playerName(season)} · {position(season)}</option>)}</select></label>;
-    })}</div>
-  </div>;
-}
-
 export default function HockeyTeamDetail() {
-  const { user, isAdmin } = useAuth();
   const { abbreviation = "" } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedSeason = Number(searchParams.get("season"));
@@ -594,9 +577,6 @@ export default function HockeyTeamDetail() {
   const [teamPlayerSeasons, setTeamPlayerSeasons] = useState<PlayerSeasonWithRelations[]>([]);
   const [contractHistory, setContractHistory] = useState<PlayerSeasonWithRelations[]>([]);
   const [leadership, setLeadership] = useState<TeamLeadership[]>([]);
-  const [canManageLeadership, setCanManageLeadership] = useState(false);
-  const [leadershipBusy, setLeadershipBusy] = useState(false);
-  const [leadershipError, setLeadershipError] = useState("");
 
   function handleSeasonChange(year: number) {
     setSelectedSeason(year);
@@ -667,33 +647,12 @@ export default function HockeyTeamDetail() {
   useEffect(() => {
     if (!team) return;
     let active = true;
-    Promise.all([
-      fetchTeamLeadership(team.id, selectedSeason),
-      user ? fetchUserTeamAssignment(user.id, selectedSeason).catch(() => null) : Promise.resolve(null),
-    ]).then(([rows, assignment]) => {
+    fetchTeamLeadership(team.id, selectedSeason).then((rows) => {
       if (!active) return;
       setLeadership(rows);
-      setCanManageLeadership(isAdmin || assignment?.fantasy_team_id === team.id);
-      setLeadershipError("");
-    }).catch((err: Error) => {
-      if (active) setLeadershipError(err.message);
-    });
+    }).catch(() => { if (active) setLeadership([]); });
     return () => { active = false; };
-  }, [team, selectedSeason, user, isAdmin]);
-
-  async function updateLeadership(slot: LeadershipSlot, playerSeasonId: number | null) {
-    if (!team || !canManageLeadership) return;
-    setLeadershipBusy(true);
-    setLeadershipError("");
-    try {
-      await setTeamLeadershipSlot({ teamId: team.id, seasonYear: selectedSeason, slot, playerSeasonId });
-      setLeadership(await fetchTeamLeadership(team.id, selectedSeason));
-    } catch (err) {
-      setLeadershipError(err instanceof Error ? err.message : "Unable to update team leadership.");
-    } finally {
-      setLeadershipBusy(false);
-    }
-  }
+  }, [team, selectedSeason]);
 
   const multiYearSeasons = useMemo(() => Array.from({ length: 5 }, (_, index) => selectedSeason + index), [selectedSeason]);
 
@@ -859,8 +818,6 @@ export default function HockeyTeamDetail() {
         <div className="mt-6 rounded-xl border border-gray-200 p-4 dark:border-gray-800">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div className="inline-flex min-h-11 flex-wrap rounded-lg border border-gray-300 p-1 dark:border-gray-700"><button type="button" onClick={() => setViewMode("lineup")} className={`rounded-md px-3 py-2 text-sm font-medium ${viewMode === "lineup" ? "bg-brand-500 text-white" : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"}`}>Lineup</button><button type="button" onClick={() => setViewMode("single")} className={`rounded-md px-3 py-2 text-sm font-medium ${viewMode === "single" ? "bg-brand-500 text-white" : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"}`}>Roster</button><button type="button" onClick={() => setViewMode("multi")} className={`rounded-md px-3 py-2 text-sm font-medium ${viewMode === "multi" ? "bg-brand-500 text-white" : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-white/5"}`}>Multi-Year</button></div><div className="w-full sm:w-40"><label htmlFor="season" className="mb-1 block text-xs font-bold text-gray-500">{viewMode === "multi" ? "Starting Season" : "Season"}</label><select id="season" value={selectedSeason} onChange={(event) => handleSeasonChange(Number(event.target.value))} className="h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 dark:border-gray-700 dark:bg-gray-900">{seasonOptions.map((year) => <option key={year}>{year}</option>)}</select></div></div>
           {viewMode === "single" && <div className="mt-3 inline-flex rounded-lg border border-gray-300 p-1 dark:border-gray-700"><button type="button" onClick={() => setStatsView("season")} className={`rounded-md px-3 py-1.5 text-xs font-bold ${statsView === "season" ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" : "text-gray-500"}`}>Season</button><button type="button" onClick={() => setStatsView("today")} className={`rounded-md px-3 py-1.5 text-xs font-bold ${statsView === "today" ? "bg-error-500 text-white" : "text-gray-500"}`}>Today</button><button type="button" onClick={() => setStatsView("yesterday")} className={`rounded-md px-3 py-1.5 text-xs font-bold ${statsView === "yesterday" ? "bg-brand-500 text-white" : "text-gray-500"}`}>Yesterday</button></div>}
-          {viewMode === "single" && canManageLeadership && <TeamLeadershipEditor roster={roster} leadership={leadership} disabled={leadershipBusy} onChange={(slot, playerSeasonId) => void updateLeadership(slot, playerSeasonId)} />}
-          {leadershipError && <div className="mt-4 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-700">Team leadership: {leadershipError}</div>}
           {error && <div className="mt-4 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-700">{error}</div>}
           {statsError && <div className="mt-4 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3 text-sm text-warning-700">Roster loaded, but MLB statistics could not be loaded: {statsError}</div>}
           {viewMode === "multi" ? <MultiYearView years={multiYearSeasons} rosters={multiYearRosters} hittingStats={mlbHittingStats} pitchingStats={mlbPitchingStats} teamNames={nhlTeamsByPlayer} teamLogos={mlbTeamLogosByPlayer} awardsByPlayer={awardsByPlayer} leadershipByPlayer={multiYearLeadership} /> : viewMode === "lineup" ? <LineupPreview roster={roster} contractHistory={contractHistory} seasonYear={selectedSeason} hittingStats={mlbHittingStats} pitchingStats={mlbPitchingStats} headshots={lineupHeadshots} nhlTeams={nhlTeamsByPlayer} teamLogos={mlbTeamLogosByPlayer} leadershipByPlayer={leadershipByPlayer} livePlayerIds={livePlayerIds} team={displayTeam || team} salaryCap={salaryCap} salarySpent={capSalary} capSpace={capSpace} buyoutPenaltyTotal={buyoutPenaltyTotal} retentionNet={retentionNet} rosterCount={rosterCount} averageRosterAge={averageRosterAge} ageRosterCount={ageRoster.length} /> : <div className="mt-5 space-y-4">
