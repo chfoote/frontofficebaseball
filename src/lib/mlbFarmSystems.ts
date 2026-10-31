@@ -74,21 +74,24 @@ export async function fetchMlbInitialSigning(playerApiId: number) {
   return data as MlbInitialSigning | null;
 }
 
-export async function fetchMlbFarmProspects(affiliates: MlbAffiliate[], throughYear: number) {
+export async function fetchMlbFarmProspects(affiliates: MlbAffiliate[], throughYear: number, acquiredPlayerNames: string[] = []) {
   const organizationIds = new Set(affiliates.map((affiliate) => affiliate.mlb_team_id));
+  const acquiredNameKeys = new Set(acquiredPlayerNames.map(ownershipNameKey));
   const draftYears = Array.from({ length: Math.max(throughYear - 2014, 1) }, (_, index) => throughYear - index);
   const [drafts, signingsResult] = await Promise.all([
     Promise.all(draftYears.map(fetchDraft)),
-    supabase.from("mlb_initial_signings").select("*").in("mlb_team_id", [...organizationIds]).lte("signing_year", throughYear),
+    supabase.from("mlb_initial_signings").select("*").lte("signing_year", throughYear),
   ]);
-  const drafted = drafts.flat().filter((prospect) => organizationIds.has(prospect.organizationId));
+  const drafted = drafts.flat().filter((prospect) => organizationIds.has(prospect.organizationId) || acquiredNameKeys.has(ownershipNameKey(prospect.playerName)));
   const fallbackSignings: MlbFarmProspect[] = [
     { key: "signed:walcott", playerName: "Sebastian Walcott", position: "SS", birthDate: "2006-03-14", organizationId: 140, organizationName: "Texas Rangers", acquiredYear: 2023, source: "INTERNATIONAL" },
     { key: "signed:murakami", playerName: "Munetaka Murakami", position: "3B", birthDate: "2000-02-02", organizationId: 145, organizationName: "Chicago White Sox", acquiredYear: 2026, source: "OTHER" },
   ];
   const signed = signingsResult.error
-    ? fallbackSignings.filter((row) => organizationIds.has(row.organizationId) && row.acquiredYear <= throughYear)
-    : (signingsResult.data || []).map((row: any) => ({ key: `signed:${row.id}`, playerId: row.player_api_id ? Number(row.player_api_id) : undefined, playerName: row.player_name, position: row.position || "—", birthDate: row.birth_date || undefined, organizationId: row.mlb_team_id, organizationName: row.mlb_team_name, acquiredYear: row.signing_year, source: row.signing_type })) as MlbFarmProspect[];
+    ? fallbackSignings.filter((row) => (organizationIds.has(row.organizationId) || acquiredNameKeys.has(ownershipNameKey(row.playerName))) && row.acquiredYear <= throughYear)
+    : (signingsResult.data || [])
+      .filter((row: any) => organizationIds.has(row.mlb_team_id) || acquiredNameKeys.has(ownershipNameKey(row.player_name)))
+      .map((row: any) => ({ key: `signed:${row.id}`, playerId: row.player_api_id ? Number(row.player_api_id) : undefined, playerName: row.player_name, position: row.position || "—", birthDate: row.birth_date || undefined, organizationId: row.mlb_team_id, organizationName: row.mlb_team_name, acquiredYear: row.signing_year, source: row.signing_type })) as MlbFarmProspect[];
   return [...drafted, ...signed];
 }
 
