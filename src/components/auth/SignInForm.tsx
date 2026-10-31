@@ -1,6 +1,6 @@
-import { useState, FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { ChevronLeftIcon, EyeCloseIcon, EyeIcon } from "../../icons";
+import { EyeCloseIcon, EyeIcon } from "../../icons";
 import Label from "../form/Label";
 import Input from "../form/input/InputField";
 import Checkbox from "../form/input/Checkbox";
@@ -18,122 +18,64 @@ export default function SignInForm() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
     setError(null);
-
     if (!email || !password) {
       setError("Please enter your email and password.");
       return;
     }
-
     setLoading(true);
-    const { error } = await signIn(email, password);
+    const result = await signIn(email, password);
     setLoading(false);
-
-    if (error) {
-      setError(error);
+    if (result.error) {
+      setError(result.error);
       return;
     }
     navigate("/");
   };
 
   return (
-    <div className="flex flex-col flex-1">
-      <div className="w-full max-w-md pt-10 mx-auto">
-        <Link
-          to="/"
-          className="inline-flex items-center text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-        >
-          <ChevronLeftIcon className="size-5" />
-          Back to league home
+    <div>
+      <div className="flex flex-col items-center text-center">
+        <Link to="/" aria-label="Front Office Baseball home" className="rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/20">
+          <LeagueBrand className="justify-center" />
         </Link>
-      </div>
-      <div className="flex flex-col justify-center flex-1 w-full max-w-md mx-auto">
-        <div>
-          <LeagueBrand className="mb-8 justify-center lg:hidden" />
-          <div className="mb-5 sm:mb-8">
-            <h1 className="mb-2 font-semibold text-gray-800 text-title-sm dark:text-white/90 sm:text-title-md">
-              Sign In
-            </h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              Enter your email and password to sign in!
-            </p>
-          </div>
-          <div>
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-6">
-                <div>
-                  <Label>
-                    Email <span className="text-error-500">*</span>{" "}
-                  </Label>
-                  <Input
-                    type="email"
-                    placeholder="info@gmail.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>
-                    Password <span className="text-error-500">*</span>{" "}
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
-                    <span
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute z-30 -translate-y-1/2 cursor-pointer right-4 top-1/2"
-                    >
-                      {showPassword ? (
-                        <EyeIcon className="fill-gray-500 dark:fill-gray-400 size-5" />
-                      ) : (
-                        <EyeCloseIcon className="fill-gray-500 dark:fill-gray-400 size-5" />
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                {error && (
-                  <p className="text-sm text-error-500" role="alert">
-                    {error}
-                  </p>
-                )}
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Checkbox checked={isChecked} onChange={setIsChecked} />
-                    <span className="block font-normal text-gray-700 text-theme-sm dark:text-gray-400">
-                      Keep me logged in
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <Button className="w-full" size="sm" disabled={loading}>
-                    {loading ? "Signing in..." : "Sign in"}
-                  </Button>
-                </div>
-              </div>
-            </form>
-
-            <div className="mt-5">
-              <p className="text-sm font-normal text-center text-gray-700 dark:text-gray-400 sm:text-start">
-                Don&apos;t have an account? {""}
-                <Link
-                  to="/signup"
-                  className="text-brand-500 hover:text-brand-600 dark:text-brand-400"
-                >
-                  Sign Up
-                </Link>
-              </p>
-            </div>
-          </div>
+        <div className="mt-7">
+          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-emerald-600 dark:text-emerald-400">Private dynasty league</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-gray-950 dark:text-white">Welcome back</h1>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Sign in to manage your roster and front office.</p>
         </div>
       </div>
+
+      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+        <div>
+          <Label>Email</Label>
+          <Input type="email" name="email" placeholder="you@example.com" value={email} onChange={(event) => setEmail(event.target.value)} className="h-12 rounded-xl" />
+        </div>
+        <div>
+          <Label>Password</Label>
+          <div className="relative">
+            <Input type={showPassword ? "text" : "password"} name="password" placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-12 rounded-xl pr-12" />
+            <button type="button" onClick={() => setShowPassword((value) => !value)} className="absolute right-4 top-1/2 z-30 -translate-y-1/2 rounded-md p-1 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={showPassword ? "Hide password" : "Show password"}>
+              {showPassword ? <EyeIcon className="size-5 fill-current" /> : <EyeCloseIcon className="size-5 fill-current" />}
+            </button>
+          </div>
+        </div>
+        <label className="flex cursor-pointer items-center gap-3 text-sm text-gray-600 dark:text-gray-400">
+          <Checkbox checked={isChecked} onChange={setIsChecked} />
+          Keep me signed in
+        </label>
+        {error && <p className="rounded-xl bg-error-50 px-4 py-3 text-sm font-medium text-error-600 dark:bg-error-500/10 dark:text-error-400" role="alert">{error}</p>}
+        <Button className="w-full rounded-xl bg-emerald-600 py-3.5 font-bold hover:bg-emerald-700 disabled:bg-emerald-400" disabled={loading}>
+          {loading ? "Signing in…" : "Sign in"}
+        </Button>
+      </form>
+
+      <p className="mt-7 text-center text-sm text-gray-500 dark:text-gray-400">
+        Need an account? <Link to="/signup" className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline dark:text-emerald-400">Create one</Link>
+      </p>
+      <p className="mt-6 border-t border-gray-100 pt-5 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400 dark:border-gray-800">Front Office Baseball League</p>
     </div>
   );
 }
