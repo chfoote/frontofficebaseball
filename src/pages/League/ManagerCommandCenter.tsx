@@ -11,6 +11,7 @@ import { CURRENT_LEAGUE_SEASON } from "../../lib/leagueSeasons";
 import { fetchUserTeamAssignment, fetchLatestUserTeamAssignment, type TeamUserAssignmentWithTeam } from "../../lib/teamUserAssignments";
 import { fetchPlayerTradeInterests, type PlayerTradeInterest } from "../../lib/tradeMarket";
 import { fetchTradeOffers, type TradeOffer } from "../../lib/tradeOffers";
+import { fetchMlbStats, type MlbStatRecord } from "../../lib/mlb";
 
 const activePositions = new Set(["C", "1B", "2B", "SS", "3B", "OF", "DH", "SP", "RP"]);
 const capPositions = new Set([...activePositions, "W", "IR", "RETENTION", "BUYOUT"]);
@@ -27,6 +28,10 @@ const positionMinimums = [
 ] as const;
 const rosterLimit = 27;
 const money = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
+const number = new Intl.NumberFormat("en-CA", { maximumFractionDigits: 1 });
+
+type Production = { points: number; gamesPlayed: number; position: string };
+type RfaPlan = { retain: boolean; salary: number; term: number };
 
 function salaryCap(_year: number) {
   return 47_000_000;
@@ -39,6 +44,10 @@ function position(row: PlayerSeasonWithRelations) {
 function playerName(row: PlayerSeasonWithRelations) {
   return row.player?.full_name || [row.player?.first_name, row.player?.last_name].filter(Boolean).join(" ") || "Unknown player";
 }
+
+function normalizedName(value: string) { return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+function batterScore(record: MlbStatRecord) { return Number(record.stats.runs ?? 0) + Number(record.stats.hits ?? 0) + Number(record.stats.doubles ?? 0) + Number(record.stats.triples ?? 0) * 2 + Number(record.stats.homeRuns ?? 0) * 3 + Number(record.stats.rbi ?? 0) + Number(record.stats.stolenBases ?? 0) * 2; }
+function pitcherScore(record: MlbStatRecord) { return Number(record.stats.wins ?? 0) * 8 + Number(record.stats.strikeOuts ?? 0) + Number(record.stats.saves ?? 0) * 6 + Number(record.stats.completeGames ?? 0) * 5 + Number(record.stats.shutouts ?? 0) * 5; }
 
 function SummaryCard({ label, value, detail, tone = "brand" }: { label: string; value: string; detail: string; tone?: "brand" | "success" | "warning" | "error" }) {
   const tones = {
@@ -67,6 +76,10 @@ export default function ManagerCommandCenter() {
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [offers, setOffers] = useState<TradeOffer[]>([]);
   const [interests, setInterests] = useState<PlayerTradeInterest[]>([]);
+  const [production, setProduction] = useState<Map<string, Production>>(new Map());
+  const [productionByName, setProductionByName] = useState<Map<string, Production>>(new Map());
+  const [rfaPlans, setRfaPlans] = useState<Record<number, RfaPlan>>({});
+  const [rfaPlansReady, setRfaPlansReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -81,7 +94,7 @@ export default function ManagerCommandCenter() {
         if (!active) return;
         setAssignment(assigned);
         if (!assigned?.fantasy_team_id) return;
-        const [rosterRows, previousSeasonRows, penaltyRows, adjustmentRows, auctionRows, offerRows, interestRows, branding] = await Promise.all([
+        const [rosterRows, previousSeasonRows, penaltyRows, adjustmentRows, auctionRows, offerRows, interestRows, branding, mlbStats] = await Promise.all([
           fetchPlayerSeasonsByTeamAndSeason(assigned.fantasy_team_id, season),
           fetchPlayerSeasonsBySeason(season - 1).catch(() => []),
           fetchBuyoutPenalties(season, assigned.fantasy_team_id).catch(() => []),
@@ -90,6 +103,7 @@ export default function ManagerCommandCenter() {
           fetchTradeOffers(season).catch(() => []),
           fetchPlayerTradeInterests(season).catch(() => []),
           fetchTeamBrandingHistory().catch(() => []),
+          Promise.all([fetchMlbStats("hitting", season - 1), fetchMlbStats("pitching", season - 1)]).catch(() => [[], []] as [MlbStatRecord[], MlbStatRecord[]]),
         ]);
         if (!active) return;
         setTeam(assigned.fantasy_team ? applyTeamBranding(assigned.fantasy_team, branding, season) : null);
@@ -100,6 +114,13 @@ export default function ManagerCommandCenter() {
         setAuctions(auctionRows);
         setOffers(offerRows);
         setInterests(interestRows);
+        const byId = new Map<string, Production>();
+        const byName = new Map<string, Production>();
+        const [hitters, pitchers] = mlbStats;
+        hitters.forEach((record) => { const item = { points: batterScore(record), gamesPlayed: Number(record.stats.gamesPlayed ?? 0), position: (record.position || "").toUpperCase() }; if (record.playerId) byId.set(String(record.playerId), item); byName.set(normalizedName(record.playerName), item); });
+        pitchers.forEach((record) => { const item = { points: pitcherScore(record), gamesPlayed: Number(record.stats.gamesPlayed ?? 0), position: (record.position || "P").toUpperCase() }; if (record.playerId) byId.set(String(record.playerId), item); byName.set(normalizedName(record.playerName), item); });
+        setProduction(byId);
+        setProductionByName(byName);
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : "Unable to load your manager dashboard.");
       } finally {
@@ -109,6 +130,19 @@ export default function ManagerCommandCenter() {
     void load();
     return () => { active = false; };
   }, [season, user]);
+
+  useEffect(() => {
+    if (!assignment?.fantasy_team_id) return;
+    setRfaPlansReady(false);
+    const key = `front-office-rfa-plan:${assignment.fantasy_team_id}:${season}`;
+    try { setRfaPlans(JSON.parse(window.localStorage.getItem(key) || "{}")); } catch { setRfaPlans({}); }
+    setRfaPlansReady(true);
+  }, [assignment?.fantasy_team_id, season]);
+
+  useEffect(() => {
+    if (!assignment?.fantasy_team_id || !rfaPlansReady) return;
+    window.localStorage.setItem(`front-office-rfa-plan:${assignment.fantasy_team_id}:${season}`, JSON.stringify(rfaPlans));
+  }, [assignment?.fantasy_team_id, rfaPlans, rfaPlansReady, season]);
 
   const teamId = assignment?.fantasy_team_id;
   const activeRoster = roster.filter((row) => activePositions.has(position(row)));
@@ -126,9 +160,11 @@ export default function ManagerCommandCenter() {
       qualifyingOffer: Math.max(Math.round((previousSalary || 0) * 0.5), 500_000),
     };
   });
+  const playerProduction = (row: PlayerSeasonWithRelations) => production.get(row.player?.player_api_id || "") || productionByName.get(normalizedName(playerName(row))) || { points: 0, gamesPlayed: 0, position: "" };
   const positionStatus = positionMinimums.map(({ code, label, minimum }) => {
-    const current = activeRoster.filter((row) => position(row) === code).length;
-    return { code, label, minimum, current, missing: Math.max(minimum - current, 0) };
+    const players = activeRoster.filter((row) => position(row) === code).sort((a, b) => playerProduction(b).points - playerProduction(a).points);
+    const current = players.length;
+    return { code, label, minimum, current, players, missing: Math.max(minimum - current, 0) };
   });
   const missingPositions = positionStatus.filter((item) => item.missing > 0);
   const activeAuctions = auctions.filter((auction) => !["completed", "cancelled"].includes(auction.status));
@@ -136,6 +172,7 @@ export default function ManagerCommandCenter() {
   const offersToReview = pendingOffers.filter((offer) => offer.to_team_id === teamId);
   const receivedInterest = interests.filter((interest) => interest.owner_team_id === teamId);
   const managerName = assignment?.profile?.display_name || user?.email?.split("@")[0] || "Manager";
+  const updateRfaPlan = (rowId: number, fallbackSalary: number, patch: Partial<RfaPlan>) => setRfaPlans((current) => ({ ...current, [rowId]: { ...(current[rowId] || { retain: false, salary: fallbackSalary, term: 1 }), ...patch } }));
 
   if (loading) return <div><PageMeta title="My Front Office | Great Lakes Dynasty" description="Your GLDHL manager dashboard" /><div className="grid animate-pulse gap-4"><div className="h-48 rounded-3xl bg-gray-200 dark:bg-gray-800" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[1,2,3,4].map((item) => <div key={item} className="h-28 rounded-2xl bg-gray-100 dark:bg-gray-800" />)}</div></div></div>;
 
@@ -181,10 +218,10 @@ export default function ManagerCommandCenter() {
           <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.04]"><p className="text-[9px] font-black uppercase tracking-wide text-gray-400">Committed</p><p className="mt-1 text-sm font-black text-gray-900 dark:text-white">{money.format(payroll)}</p></div>
           <div className={`rounded-xl p-3 ${capSpace < 0 ? "bg-error-50 dark:bg-error-500/10" : "bg-success-50 dark:bg-success-500/10"}`}><p className="text-[9px] font-black uppercase tracking-wide text-gray-400">{capSpace < 0 ? "Over Cap" : "Cap Space"}</p><p className={`mt-1 text-sm font-black ${capSpace < 0 ? "text-error-600" : "text-success-600"}`}>{money.format(Math.abs(capSpace))}</p></div>
         </div>
-        <div className="mt-5"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-black uppercase tracking-wider text-gray-500">Scoring Positions</h3><span className="text-[10px] font-bold text-gray-400">Current / Minimum</span></div><div className="space-y-1.5">{positionStatus.map((item) => <div key={item.code} className={`flex items-center justify-between rounded-lg px-3 py-2 ${item.missing ? "bg-warning-50 dark:bg-warning-500/10" : "bg-gray-50 dark:bg-white/[0.035]"}`}><span className="text-xs font-bold text-gray-700 dark:text-gray-200">{item.label}</span><span className="flex items-center gap-2"><span className="text-xs font-black tabular-nums text-gray-700 dark:text-gray-200">{item.current} / {item.minimum}</span>{item.missing ? <span className="rounded-full bg-warning-100 px-2 py-0.5 text-[9px] font-black text-warning-700 dark:bg-warning-500/20 dark:text-warning-300">Need {item.missing}</span> : <span className="text-xs font-black text-success-500">✓</span>}</span></div>)}</div></div>
+        <div className="mt-5"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-black uppercase tracking-wider text-gray-500">Scoring Positions</h3><span className="text-[10px] font-bold text-gray-400">Select a position</span></div><div className="space-y-1.5">{positionStatus.map((item) => <details key={item.code} className={`group overflow-hidden rounded-lg ${item.missing ? "bg-warning-50 dark:bg-warning-500/10" : "bg-gray-50 dark:bg-white/[0.035]"}`}><summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2 marker:hidden"><span className="flex items-center gap-2 text-xs font-bold text-gray-700 dark:text-gray-200"><span className="text-[10px] text-gray-400 transition group-open:rotate-90">▶</span>{item.label}</span><span className="flex items-center gap-2"><span className="text-xs font-black tabular-nums text-gray-700 dark:text-gray-200">{item.current} / {item.minimum}</span>{item.missing ? <span className="rounded-full bg-warning-100 px-2 py-0.5 text-[9px] font-black text-warning-700 dark:bg-warning-500/20 dark:text-warning-300">Need {item.missing}</span> : <span className="text-xs font-black text-success-500">✓</span>}</span></summary><div className="border-t border-gray-200/70 px-3 py-2 dark:border-gray-700/60">{item.players.length ? <div className="space-y-2">{item.players.map((row) => { const stats = playerProduction(row); const ppg = stats.gamesPlayed ? stats.points / stats.gamesPlayed : 0; const remainingTerm = row.term_end_year ? Math.max(row.term_end_year - season + 1, 1) : null; return <div key={row.id} className="rounded-lg bg-white px-3 py-2 shadow-sm dark:bg-gray-900"><div className="flex items-center justify-between gap-2"><p className="truncate text-xs font-bold text-gray-900 dark:text-white">{playerName(row)}</p><p className="shrink-0 text-[10px] font-black text-brand-600 dark:text-brand-300">{number.format(stats.points)} PTS · {number.format(ppg)} PPG</p></div><p className="mt-0.5 text-[10px] text-gray-500">{money.format(row.salary || 0)} · {remainingTerm ? `${remainingTerm} year${remainingTerm === 1 ? "" : "s"} remaining` : "Term unavailable"}</p></div>; })}</div> : <p className="py-2 text-center text-xs text-gray-500">No {item.label.toLowerCase()} currently assigned.</p>}</div></details>)}</div></div>
         <div className={`mt-5 rounded-xl border p-4 ${restrictedFreeAgents.length ? "border-violet-300 bg-violet-50 dark:border-violet-500/40 dark:bg-violet-500/10" : "border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.03]"}`}>
           <div className="flex items-center justify-between"><h3 className={`text-xs font-black uppercase tracking-wider ${restrictedFreeAgents.length ? "text-violet-700 dark:text-violet-300" : "text-gray-500"}`}>RFA Decisions</h3>{restrictedFreeAgents.length > 0 && <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-black text-white">⚠ {restrictedFreeAgents.length} due</span>}</div>
-          {restrictedFreeAgents.length ? <div className="mt-3 space-y-2">{restrictedFreeAgents.map(({ row, previousSalary, qualifyingOffer }) => <div key={row.id} className="rounded-lg border border-violet-200 bg-white px-3 py-2 dark:border-violet-500/30 dark:bg-gray-900"><p className="text-sm font-bold text-gray-900 dark:text-white">{playerName(row)}</p><p className="mt-0.5 text-[10px] text-gray-500">Previous: {previousSalary === null ? "Unavailable" : money.format(previousSalary)} · QO: <strong className="text-violet-700 dark:text-violet-300">{money.format(qualifyingOffer)}</strong></p></div>)}</div> : <p className="mt-2 text-xs text-gray-500">No RFA decisions are currently due.</p>}
+          {restrictedFreeAgents.length ? <div className="mt-3 space-y-2">{restrictedFreeAgents.map(({ row, previousSalary, qualifyingOffer }) => { const plan = rfaPlans[row.id] || { retain: false, salary: qualifyingOffer, term: 1 }; return <details key={row.id} className="overflow-hidden rounded-lg border border-violet-200 bg-white dark:border-violet-500/30 dark:bg-gray-900"><summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 marker:hidden"><div><p className="text-sm font-bold text-gray-900 dark:text-white">{playerName(row)}</p><p className="mt-0.5 text-[10px] text-gray-500">Previous: {previousSalary === null ? "Unavailable" : money.format(previousSalary)} · QO: <strong className="text-violet-700 dark:text-violet-300">{money.format(qualifyingOffer)}</strong></p></div><span className={`rounded-full px-2 py-1 text-[9px] font-black ${plan.retain ? "bg-success-100 text-success-700" : "bg-gray-100 text-gray-500"}`}>{plan.retain ? "RETAIN" : "UNDECIDED"}</span></summary><div className="border-t border-violet-100 p-3 dark:border-violet-500/20"><label className="flex cursor-pointer items-center gap-2 text-xs font-black text-violet-800 dark:text-violet-200"><input type="checkbox" checked={plan.retain} onChange={(event) => updateRfaPlan(row.id, qualifyingOffer, { retain: event.target.checked })} className="h-4 w-4 accent-violet-600" />Retain this player</label>{plan.retain && <div className="mt-3 grid grid-cols-2 gap-2"><label className="text-[10px] font-black uppercase text-gray-500">Annual salary<input type="number" min={qualifyingOffer} step="50000" value={plan.salary} onChange={(event) => updateRfaPlan(row.id, qualifyingOffer, { salary: Math.max(Number(event.target.value), qualifyingOffer) })} className="mt-1 h-9 w-full rounded-lg border border-gray-300 px-2 text-xs dark:border-gray-700 dark:bg-gray-950" /></label><label className="text-[10px] font-black uppercase text-gray-500">Term<select value={plan.term} onChange={(event) => updateRfaPlan(row.id, qualifyingOffer, { term: Number(event.target.value) })} className="mt-1 h-9 w-full rounded-lg border border-gray-300 px-2 text-xs dark:border-gray-700 dark:bg-gray-950">{[1,2,3,4,5].map((year) => <option key={year} value={year}>{year} year{year === 1 ? "" : "s"}</option>)}</select></label><button type="button" onClick={() => updateRfaPlan(row.id, qualifyingOffer, { retain: true, salary: qualifyingOffer, term: 1 })} className="col-span-2 rounded-lg bg-violet-100 px-3 py-2 text-[10px] font-black text-violet-700 dark:bg-violet-500/20 dark:text-violet-200">Use 1-year qualifying offer · {money.format(qualifyingOffer)}</button></div>}</div></details>; })}</div> : <p className="mt-2 text-xs text-gray-500">No RFA decisions are currently due.</p>}
         </div>
       </section>
     </div>
