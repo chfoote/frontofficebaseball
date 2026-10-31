@@ -130,6 +130,7 @@ export default function ManagerCommandCenter() {
     const current = activeRoster.filter((row) => position(row) === code).length;
     return { code, label, minimum, current, missing: Math.max(minimum - current, 0) };
   });
+  const missingPositions = positionStatus.filter((item) => item.missing > 0);
   const activeAuctions = auctions.filter((auction) => !["completed", "cancelled"].includes(auction.status));
   const pendingOffers = offers.filter((offer) => offer.status === "pending" && [offer.from_team_id, offer.to_team_id, offer.third_team_id].includes(teamId || -1));
   const offersToReview = pendingOffers.filter((offer) => offer.to_team_id === teamId);
