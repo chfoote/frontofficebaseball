@@ -15,7 +15,7 @@ export default function LeagueBrand({ compact = false, className = "" }: LeagueB
             Front Office Baseball
           </span>
           <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-600 dark:text-emerald-400">
-            League
+            Fantasy Sports Platform
           </span>
         </div>
       )}
