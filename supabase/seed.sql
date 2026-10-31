@@ -1,0 +1,35 @@
+-- Seed data for public.fantasy_teams.
+-- Add your league's teams here, then run this file with your Supabase seed workflow.
+--
+-- Example:
+-- insert into public.fantasy_teams (
+--   team_name,
+--   abbreviation,
+--   logo,
+--   primary_color,
+--   secondary_color,
+--   manager_name,
+--   manager_since,
+--   al_farm_system,
+--   nl_farm_system,
+--   championships,
+--   runner_up_finishes,
+--   third_place_finishes,
+--   active,
+--   notes
+-- ) values (
+--   'Example Team',
+--   'EXT',
+--   '/images/teams/example-team.png',
+--   '#0f172a',
+--   '#f8fafc',
+--   'Example Manager',
+--   '2024-03-01',
+--   'Toronto Blue Jays',
+--   'New York Mets',
+--   0,
+--   0,
+--   0,
+--   true,
+--   'Replace this row with a real team.'
+-- );
