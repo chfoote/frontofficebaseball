@@ -303,9 +303,9 @@ function Medal({ icon, value, label, years, tone }: { icon: string; value: numbe
     silver: "border-gray-300 bg-gray-100 text-gray-800 dark:border-gray-600 dark:bg-gray-500/10 dark:text-gray-200",
     bronze: "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-500/30 dark:bg-orange-500/10 dark:text-orange-300",
   };
-  return <div className={`flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2 ${styles[tone]}`}>
-    <span className="text-lg" aria-label={label}>{icon}</span>
-    <div className="min-w-0"><p className="text-xs font-black"><span className="mr-1 text-base">{value}</span>{label}</p><p className="truncate text-[9px] font-semibold opacity-70">{years.length ? years.join(", ") : "No finishes"}</p></div>
+  return <div className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 ${styles[tone]}`} title={`${label}: ${value}${years.length ? ` (${years.join(", ")})` : ""}`} aria-label={`${label}: ${value}`}>
+    <span className="text-xl" aria-hidden="true">{icon}</span>
+    <span className="text-lg font-black tabular-nums">{value}</span>
   </div>;
 }
 
