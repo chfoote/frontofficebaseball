@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import PageMeta from "../../components/common/PageMeta";
 import { useAuth } from "../../context/AuthContext";
@@ -11,7 +11,6 @@ import { CURRENT_LEAGUE_SEASON } from "../../lib/leagueSeasons";
 import { fetchUserTeamAssignment, fetchLatestUserTeamAssignment, type TeamUserAssignmentWithTeam } from "../../lib/teamUserAssignments";
 import { fetchPlayerTradeInterests, type PlayerTradeInterest } from "../../lib/tradeMarket";
 import { fetchTradeOffers, type TradeOffer } from "../../lib/tradeOffers";
-import { fetchLeagueTransactions, type LeagueTransaction } from "../../lib/transactions";
 
 const activePositions = new Set(["C", "1B", "2B", "SS", "3B", "OF", "DH", "SP", "RP"]);
 const capPositions = new Set([...activePositions, "W", "IR", "RETENTION", "BUYOUT"]);
@@ -41,29 +40,6 @@ function playerName(row: PlayerSeasonWithRelations) {
   return row.player?.full_name || [row.player?.first_name, row.player?.last_name].filter(Boolean).join(" ") || "Unknown player";
 }
 
-function relativeDate(value: string) {
-  const time = new Date(value).getTime();
-  const hours = Math.floor((Date.now() - time) / 3_600_000);
-  if (hours < 1) return "Just now";
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(value).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
-}
-
-function transactionLabel(transaction: LeagueTransaction) {
-  if (transaction.trade_offer_id) return "Trade completed";
-  const name = transaction.player?.full_name || "Player";
-  const labels: Record<string, string> = {
-    signed: `${name} signed`, called_up: `${name} called up`, waived: `${name} waived`,
-    claimed: `${name} claimed`, bought_out: `${name} bought out`, retained: `${name} retained`,
-    injured_reserve: `${name} placed on IR`, long_term_injured_reserve: `${name} placed on LTIR`,
-    released_to_rfa_offer: `${name} released to RFA offer`, matched_rfa_offer: `${name} RFA offer matched`, competitive_balance_drafted: `${name} selected in Competitive Balance Draft`,
-    traded: `${name} acquired`,
-  };
-  return labels[transaction.action] || `${name} updated`;
-}
-
 function SummaryCard({ label, value, detail, tone = "brand" }: { label: string; value: string; detail: string; tone?: "brand" | "success" | "warning" | "error" }) {
   const tones = {
     brand: "border-brand-200 bg-brand-50 text-brand-700 dark:border-brand-500/30 dark:bg-brand-500/10 dark:text-brand-300",
@@ -91,7 +67,6 @@ export default function ManagerCommandCenter() {
   const [auctions, setAuctions] = useState<Auction[]>([]);
   const [offers, setOffers] = useState<TradeOffer[]>([]);
   const [interests, setInterests] = useState<PlayerTradeInterest[]>([]);
-  const [transactions, setTransactions] = useState<LeagueTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -106,7 +81,7 @@ export default function ManagerCommandCenter() {
         if (!active) return;
         setAssignment(assigned);
         if (!assigned?.fantasy_team_id) return;
-        const [rosterRows, previousSeasonRows, penaltyRows, adjustmentRows, auctionRows, offerRows, interestRows, transactionRows, branding] = await Promise.all([
+        const [rosterRows, previousSeasonRows, penaltyRows, adjustmentRows, auctionRows, offerRows, interestRows, branding] = await Promise.all([
           fetchPlayerSeasonsByTeamAndSeason(assigned.fantasy_team_id, season),
           fetchPlayerSeasonsBySeason(season - 1).catch(() => []),
           fetchBuyoutPenalties(season, assigned.fantasy_team_id).catch(() => []),
@@ -114,7 +89,6 @@ export default function ManagerCommandCenter() {
           fetchAuctions(season).catch(() => []),
           fetchTradeOffers(season).catch(() => []),
           fetchPlayerTradeInterests(season).catch(() => []),
-          fetchLeagueTransactions().catch(() => []),
           fetchTeamBrandingHistory().catch(() => []),
         ]);
         if (!active) return;
@@ -126,7 +100,6 @@ export default function ManagerCommandCenter() {
         setAuctions(auctionRows);
         setOffers(offerRows);
         setInterests(interestRows);
-        setTransactions(transactionRows);
       } catch (reason) {
         if (active) setError(reason instanceof Error ? reason.message : "Unable to load your manager dashboard.");
       } finally {
@@ -153,21 +126,14 @@ export default function ManagerCommandCenter() {
       qualifyingOffer: Math.max(Math.round((previousSalary || 0) * 0.5), 500_000),
     };
   });
-  const missingPositions = positionMinimums.map(({ code, label, minimum }) => ({
-    code,
-    label,
-    missing: Math.max(minimum - activeRoster.filter((row) => position(row) === code).length, 0),
-  })).filter((item) => item.missing > 0);
+  const positionStatus = positionMinimums.map(({ code, label, minimum }) => {
+    const current = activeRoster.filter((row) => position(row) === code).length;
+    return { code, label, minimum, current, missing: Math.max(minimum - current, 0) };
+  });
   const activeAuctions = auctions.filter((auction) => !["completed", "cancelled"].includes(auction.status));
   const pendingOffers = offers.filter((offer) => offer.status === "pending" && [offer.from_team_id, offer.to_team_id, offer.third_team_id].includes(teamId || -1));
   const offersToReview = pendingOffers.filter((offer) => offer.to_team_id === teamId);
   const receivedInterest = interests.filter((interest) => interest.owner_team_id === teamId);
-  const teamTransactions = useMemo(() => transactions.filter((transaction) => {
-    if (!teamId) return false;
-    if (transaction.fantasy_team_id === teamId) return true;
-    const trade = transaction.trade_offer;
-    return Boolean(trade && [trade.from_team?.id, trade.to_team?.id, trade.third_team?.id].includes(teamId));
-  }).slice(0, 5), [teamId, transactions]);
   const managerName = assignment?.profile?.display_name || user?.email?.split("@")[0] || "Manager";
 
   if (loading) return <div><PageMeta title="My Front Office | Great Lakes Dynasty" description="Your GLDHL manager dashboard" /><div className="grid animate-pulse gap-4"><div className="h-48 rounded-3xl bg-gray-200 dark:bg-gray-800" /><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[1,2,3,4].map((item) => <div key={item} className="h-28 rounded-2xl bg-gray-100 dark:bg-gray-800" />)}</div></div></div>;
@@ -198,24 +164,27 @@ export default function ManagerCommandCenter() {
 
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
       <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
-        <div className="mb-4 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-brand-500">Your inbox</p><h2 className="mt-1 text-xl font-bold text-gray-900 dark:text-white">Needs attention</h2></div><span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-300">{offersToReview.length + receivedInterest.length + (missingPositions.length ? 1 : 0) + (restrictedFreeAgents.length ? 1 : 0) + (finalContractYear.length ? 1 : 0)}</span></div>
+        <div className="mb-4 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-brand-500">Your inbox</p><h2 className="mt-1 text-xl font-bold text-gray-900 dark:text-white">Needs attention</h2></div><span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-300">{offersToReview.length + receivedInterest.length + (finalContractYear.length ? 1 : 0)}</span></div>
         <div className="space-y-3">
           {offersToReview.length > 0 && <ActionItem title={`${offersToReview.length} trade ${offersToReview.length === 1 ? "offer needs" : "offers need"} your response`} detail="Review the players, salary impact, and roster compliance before deciding." link="/trade-manager" linkLabel="Review trades" tone="warning" />}
           {receivedInterest.length > 0 && <ActionItem title={`${receivedInterest.length} expression${receivedInterest.length === 1 ? "" : "s"} of trade interest`} detail="Other managers have shown interest in players on your roster." link="/trade-market" linkLabel="View interest" />}
-          {missingPositions.length > 0 && <ActionItem title="Your roster has open scoring positions" detail={`Still needed: ${missingPositions.map((item) => `${item.missing} ${item.label}`).join(", ")}.`} link="/trade-market" linkLabel="Find players" tone="error" />}
-          {restrictedFreeAgents.length > 0 && <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-500/30 dark:bg-violet-500/10">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-semibold text-violet-900 dark:text-violet-200">{restrictedFreeAgents.length} RFA decision{restrictedFreeAgents.length === 1 ? "" : "s"} due now</p><p className="mt-0.5 text-sm text-violet-700/80 dark:text-violet-300/80">These contracts have already expired. A qualifying offer keeps the player’s rights for one year.</p></div><Link to="/auction-house" className="shrink-0 text-sm font-semibold text-violet-700 hover:underline dark:text-violet-300">Review RFA rights →</Link></div>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">{restrictedFreeAgents.map(({ row, previousSalary, qualifyingOffer }) => <div key={row.id} className="rounded-lg border border-violet-200 bg-white px-3 py-2.5 dark:border-violet-500/30 dark:bg-gray-900"><p className="text-sm font-bold text-gray-900 dark:text-white">{playerName(row)}</p><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{season - 1} salary: <strong className="text-gray-700 dark:text-gray-200">{previousSalary === null ? "Unavailable" : money.format(previousSalary)}</strong></p><p className="mt-0.5 text-xs font-semibold text-violet-700 dark:text-violet-300">Qualifying offer: {money.format(qualifyingOffer)} · 1 year</p></div>)}</div>
-            <p className="mt-2 text-[11px] text-violet-600/75 dark:text-violet-300/70">Calculated at 50% of the previous salary, with a minimum qualifying salary of {money.format(500_000)}.</p>
-          </div>}
           {finalContractYear.length > 0 && <ActionItem title={`${finalContractYear.length} player${finalContractYear.length === 1 ? " is" : "s are"} entering the final contract year`} detail={`${finalContractYear.slice(0, 3).map(playerName).join(", ")}${finalContractYear.length > 3 ? ` and ${finalContractYear.length - 3} more` : ""}. Under team control through the ${season} season; contracts expire afterward.`} link={`/teams/${teamId}`} linkLabel="View contract outlook" />}
-          {offersToReview.length === 0 && receivedInterest.length === 0 && missingPositions.length === 0 && restrictedFreeAgents.length === 0 && finalContractYear.length === 0 && <div className="rounded-xl border border-dashed border-success-300 bg-success-50 p-7 text-center dark:border-success-500/30 dark:bg-success-500/10"><p className="font-bold text-success-700 dark:text-success-300">You’re all caught up.</p><p className="mt-1 text-sm text-success-600/80 dark:text-success-300/80">No urgent roster, contract, or trade decisions right now.</p></div>}
+          {offersToReview.length === 0 && receivedInterest.length === 0 && finalContractYear.length === 0 && <div className="rounded-xl border border-dashed border-success-300 bg-success-50 p-7 text-center dark:border-success-500/30 dark:bg-success-500/10"><p className="font-bold text-success-700 dark:text-success-300">Your inbox is clear.</p><p className="mt-1 text-sm text-success-600/80 dark:text-success-300/80">No new trade messages or expiring-contract reminders.</p></div>}
         </div>
       </section>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-white/[0.03] sm:p-6">
-        <div className="mb-4 flex items-center justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-gray-400">Around your team</p><h2 className="mt-1 text-xl font-bold text-gray-900 dark:text-white">Recent activity</h2></div><Link to="/transactions" className="text-xs font-semibold text-brand-500 hover:underline">View all</Link></div>
-        {teamTransactions.length ? <div className="space-y-1">{teamTransactions.map((transaction) => <Link key={transaction.id} to={`/transactions#${transaction.trade_offer_id ? `trade-${transaction.trade_offer_id}` : `transaction-${transaction.id}`}`} className="flex items-center justify-between gap-3 rounded-xl px-3 py-3 transition hover:bg-gray-50 dark:hover:bg-white/[0.04]"><div className="min-w-0"><p className="truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{transactionLabel(transaction)}</p><p className="mt-0.5 text-xs text-gray-400">{transaction.notes || transaction.fantasy_team?.team_name || "League transaction"}</p></div><span className="shrink-0 text-[11px] font-medium text-gray-400">{relativeDate(transaction.created_at)}</span></Link>)}</div> : <p className="rounded-xl border border-dashed border-gray-200 p-6 text-center text-sm text-gray-500 dark:border-gray-700">No recent team transactions.</p>}
+        <div className="mb-4"><p className="text-xs font-bold uppercase tracking-wider text-brand-500">Season {season}</p><h2 className="mt-1 text-xl font-bold text-gray-900 dark:text-white">Roster Planner</h2></div>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.04]"><p className="text-[9px] font-black uppercase tracking-wide text-gray-400">Salary Cap</p><p className="mt-1 text-sm font-black text-gray-900 dark:text-white">{money.format(salaryCap(season))}</p></div>
+          <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.04]"><p className="text-[9px] font-black uppercase tracking-wide text-gray-400">Committed</p><p className="mt-1 text-sm font-black text-gray-900 dark:text-white">{money.format(payroll)}</p></div>
+          <div className={`rounded-xl p-3 ${capSpace < 0 ? "bg-error-50 dark:bg-error-500/10" : "bg-success-50 dark:bg-success-500/10"}`}><p className="text-[9px] font-black uppercase tracking-wide text-gray-400">{capSpace < 0 ? "Over Cap" : "Cap Space"}</p><p className={`mt-1 text-sm font-black ${capSpace < 0 ? "text-error-600" : "text-success-600"}`}>{money.format(Math.abs(capSpace))}</p></div>
+        </div>
+        <div className="mt-5"><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-black uppercase tracking-wider text-gray-500">Scoring Positions</h3><span className="text-[10px] font-bold text-gray-400">Current / Minimum</span></div><div className="space-y-1.5">{positionStatus.map((item) => <div key={item.code} className={`flex items-center justify-between rounded-lg px-3 py-2 ${item.missing ? "bg-warning-50 dark:bg-warning-500/10" : "bg-gray-50 dark:bg-white/[0.035]"}`}><span className="text-xs font-bold text-gray-700 dark:text-gray-200">{item.label}</span><span className="flex items-center gap-2"><span className="text-xs font-black tabular-nums text-gray-700 dark:text-gray-200">{item.current} / {item.minimum}</span>{item.missing ? <span className="rounded-full bg-warning-100 px-2 py-0.5 text-[9px] font-black text-warning-700 dark:bg-warning-500/20 dark:text-warning-300">Need {item.missing}</span> : <span className="text-xs font-black text-success-500">✓</span>}</span></div>)}</div></div>
+        <div className={`mt-5 rounded-xl border p-4 ${restrictedFreeAgents.length ? "border-violet-300 bg-violet-50 dark:border-violet-500/40 dark:bg-violet-500/10" : "border-gray-200 bg-gray-50 dark:border-gray-800 dark:bg-white/[0.03]"}`}>
+          <div className="flex items-center justify-between"><h3 className={`text-xs font-black uppercase tracking-wider ${restrictedFreeAgents.length ? "text-violet-700 dark:text-violet-300" : "text-gray-500"}`}>RFA Decisions</h3>{restrictedFreeAgents.length > 0 && <span className="rounded-full bg-violet-600 px-2 py-0.5 text-[9px] font-black text-white">⚠ {restrictedFreeAgents.length} due</span>}</div>
+          {restrictedFreeAgents.length ? <div className="mt-3 space-y-2">{restrictedFreeAgents.map(({ row, previousSalary, qualifyingOffer }) => <div key={row.id} className="rounded-lg border border-violet-200 bg-white px-3 py-2 dark:border-violet-500/30 dark:bg-gray-900"><p className="text-sm font-bold text-gray-900 dark:text-white">{playerName(row)}</p><p className="mt-0.5 text-[10px] text-gray-500">Previous: {previousSalary === null ? "Unavailable" : money.format(previousSalary)} · QO: <strong className="text-violet-700 dark:text-violet-300">{money.format(qualifyingOffer)}</strong></p></div>)}</div> : <p className="mt-2 text-xs text-gray-500">No RFA decisions are currently due.</p>}
+        </div>
       </section>
     </div>
 
