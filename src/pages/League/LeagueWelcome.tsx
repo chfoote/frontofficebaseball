@@ -9,7 +9,7 @@ import { CURRENT_LEAGUE_SEASON } from "../../lib/leagueSeasons";
 import { fetchLatestUserTeamAssignment, fetchUserTeamAssignment, type TeamUserAssignmentWithTeam } from "../../lib/teamUserAssignments";
 
 export default function LeagueWelcome() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [assignment, setAssignment] = useState<TeamUserAssignmentWithTeam | null>(null);
   const [team, setTeam] = useState<FantasyTeam | null>(null);
   const [loading, setLoading] = useState(true);
@@ -34,7 +34,7 @@ export default function LeagueWelcome() {
     return () => { active = false; };
   }, [user]);
 
-  const displayName = assignment?.profile?.display_name
+  const displayName = isAdmin ? "Admin" : assignment?.profile?.display_name
     || user?.user_metadata?.display_name
     || [user?.user_metadata?.first_name, user?.user_metadata?.last_name].filter(Boolean).join(" ")
     || user?.email?.split("@")[0]
