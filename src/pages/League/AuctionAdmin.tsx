@@ -259,7 +259,7 @@ export default function AuctionAdmin() {
   const selectedOption = nomineeOptions.find((option) => option.value === nomineeId) || null;
   const selectedPlayer = selectedOption?.player || null;
   const previousNominee = selectedPlayer ? previousPlayerSeasons.find((row) => row.player_id === selectedPlayer.id) : undefined;
-  const requiredQualifyingAav = Math.max(Math.round((previousNominee?.salary||0)*0.5),500000);
+  const requiredQualifyingAav = Math.max(Math.round((previousNominee?.salary||0)*0.5),250000);
   async function selectNominee(value:string){setNomineeId(value);const option=nomineeOptions.find(item=>item.value===value);const row=option?.player?playerSeasons.find(item=>item.player_id===option.player!.id):undefined;const storedPosition=(row?.position||"").toUpperCase();const isRfa=storedPosition==="RFA";setAuctionType(isRfa?"rfa":"ufa");setAllow500Minimum(isRfa);setRfaQualified(true);if(option&&positionOrder.includes(option.position)){setRosterPosition(option.position);return;}if(option?.playerApiId){try{const landing=await fetchNhlPlayerLanding(Number(option.playerApiId));const position=normalizePosition(landing.position);if(positionOrder.includes(position))setRosterPosition(position);}catch{/* Position remains editable if NHL data is unavailable. */}}}
   async function handleNominate() {
     if (!user || !selectedOption) return;
@@ -283,7 +283,7 @@ export default function AuctionAdmin() {
           notes: "Created automatically from NHL stats by Auction Admin nomination.",
         });
       }
-      const minimumAav = allow500Minimum ? 500000 : 750000;
+      const minimumAav = 250000;
       let seasonRow = playerSeasons.find((row) => row.player_id === player.id);
       if (!seasonRow && !isTestAuction) {
         if (effectiveType === "rfa") throw new Error("Create an RFA rights record and assign its rights team before nominating this player as an RFA.");
@@ -530,7 +530,7 @@ export default function AuctionAdmin() {
           </div>
           <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${allow500Minimum?"border-success-300 bg-success-50 dark:border-success-500/50 dark:bg-success-500/10":"border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
             <input type="checkbox" checked={allow500Minimum} onChange={e=>setAllow500Minimum(e.target.checked)} className="mt-0.5 h-5 w-5 rounded border-gray-300 text-success-600"/>
-            <span><span className="block text-sm font-bold text-gray-900 dark:text-white">Allow $500,000 minimum bids</span><span className="mt-1 block text-xs text-gray-600 dark:text-gray-300">Enabled automatically for RFAs. Leave it enabled if an unqualified RFA is converted into an open UFA auction. Regular UFAs remain at $750,000 unless you deliberately override them here.</span></span>
+            <span><span className="block text-sm font-bold text-gray-900 dark:text-white">Use the $250,000 league minimum</span><span className="mt-1 block text-xs text-gray-600 dark:text-gray-300">All MLB contracts and qualifying offers use a $250,000 salary floor.</span></span>
           </label>
           <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${isTestAuction?"border-amber-300 bg-amber-50 dark:border-amber-500/50 dark:bg-amber-500/10":"border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
             <input type="checkbox" checked={isTestAuction} onChange={e=>setIsTestAuction(e.target.checked)} className="mt-0.5 h-5 w-5 rounded border-gray-300 text-amber-500"/>

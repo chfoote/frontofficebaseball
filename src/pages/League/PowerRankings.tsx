@@ -225,7 +225,7 @@ function RookieWatchTable({ title, subtitle, rows, season, accent = "brand" }: {
 }
 
 function RookieWatch({ rows, season, mode }: { rows: PlayerRanking[]; season: number; mode: PeriodMode }) {
-  const elcPlayers = rows.filter((row) => row.season.salary === 500_000 && (row.season.contract_group || "").toUpperCase() === "ELC" && row.season.term_end_year != null && row.season.term_end_year >= season)
+  const elcPlayers = rows.filter((row) => row.season.salary === 250_000 && (row.season.contract_group || "").toUpperCase() === "ELC" && row.season.term_end_year != null && row.season.term_end_year >= season)
     .filter((row) => row.gamesPlayed > 0)
     .sort((a, b) => b.points - a.points || b.gamesPlayed - a.gamesPlayed);
   const firstYear = elcPlayers.filter((row) => row.season.term_end_year === season + 2).slice(0, 10);
@@ -236,7 +236,7 @@ function RookieWatch({ rows, season, mode }: { rows: PlayerRanking[]; season: nu
   return <div className="space-y-5">
     <div className="grid items-start gap-5 xl:grid-cols-2">
       <div className="space-y-5"><RookieWatchTable title="Top 5 ELC Forwards" subtitle={`All ELC years · ${rangeName}`} rows={forwards} season={season} /><RookieWatchTable title="Top 5 ELC Defencemen" subtitle={`All ELC years · ${rangeName}`} rows={defence} season={season} /><RookieWatchTable title="Top 5 ELC Goalies" subtitle={`All ELC years · ${rangeName}`} rows={goalies} season={season} /></div>
-      <aside className="space-y-5 xl:sticky xl:top-24"><section className="overflow-hidden rounded-2xl bg-gradient-to-br from-amber-950 via-slate-950 to-emerald-950 p-6 text-white shadow-lg"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">🌟 Rookie Watch · Season {season}</p><h2 className="mt-2 text-2xl font-black">The next wave</h2><p className="mt-2 text-sm leading-6 text-slate-300">ELC leaderboards include every active $500,000 entry-level contract. Rookie of the Year Watch is stricter: only players in year one of their three-year ELC are eligible.</p></section><RookieWatchTable title="Rookie of the Year Watch" subtitle={`First-year ELC players ranked together across all positions for ${rangeName}.`} rows={firstYear} season={season} accent="amber" /></aside>
+      <aside className="space-y-5 xl:sticky xl:top-24"><section className="overflow-hidden rounded-2xl bg-gradient-to-br from-amber-950 via-slate-950 to-emerald-950 p-6 text-white shadow-lg"><p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-300">🌟 Rookie Watch · Season {season}</p><h2 className="mt-2 text-2xl font-black">The next wave</h2><p className="mt-2 text-sm leading-6 text-slate-300">ELC leaderboards include every active $250,000 entry-level contract. Rookie of the Year Watch is stricter: only players in year one of their three-year ELC are eligible.</p></section><RookieWatchTable title="Rookie of the Year Watch" subtitle={`First-year ELC players ranked together across all positions for ${rangeName}.`} rows={firstYear} season={season} accent="amber" /></aside>
     </div>
   </div>;
 }

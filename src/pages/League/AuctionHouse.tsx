@@ -51,7 +51,7 @@ const money = new Intl.NumberFormat("en-CA", {
   maximumFractionDigits: 0,
 });
 const requiredRoster = { C: 3, LW: 3, RW: 3, D: 6, G: 2 } as const;
-const minimumSalaryPerOpening = 750_000;
+const minimumSalaryPerOpening = 250_000;
 const allowedAuctionYears = [1, 2, 3, 5] as const;
 type RosterPosition = keyof typeof requiredRoster;
 
@@ -705,7 +705,7 @@ export default function AuctionHouse() {
         if (auction.status !== "open" || auction.auction_type !== "ufa")
           continue;
         const high = [...auction.auction_bids].sort(compareAuctionBids)[0];
-        const minimum = auction.minimum_aav || 500_000;
+        const minimum = auction.minimum_aav || 250_000;
         const increment = auction.bid_increment || 25_000;
         const existing = next[auction.id];
         if (!existing) {
@@ -882,7 +882,7 @@ export default function AuctionHouse() {
   const budget = Math.max(capSpace - rosterReserve, 0);
   async function bid(a: Auction) {
     const form = bidForms[a.id] || {
-      aav: String(a.minimum_aav || 500_000),
+      aav: String(a.minimum_aav || 250_000),
       years: "1",
     };
     setBusy(`bid-${a.id}`);
@@ -1099,10 +1099,10 @@ export default function AuctionHouse() {
                       const minimum =
                         a.auction_type === "rfa" && ownsRights
                           ? Math.max(
-                              a.minimum_aav || 500_000,
-                              a.qualifying_aav || 500_000,
+                              a.minimum_aav || 250_000,
+                              a.qualifying_aav || 250_000,
                             )
-                          : a.minimum_aav || 500_000;
+                          : a.minimum_aav || 250_000;
                       const defaultYears = allowedAuctionTerm(a.auction_type === "ufa" && high
                         ? high.years
                         : mine?.years);

@@ -15,8 +15,8 @@ const sections = [
 
 const salaryRules = [
   ["Annual Salary Cap", "$47,000,000"],
-  ["Minimum Free Agent Salary", "$750,000"],
-  ["Minimum Retained RFA Salary", "$500,000"],
+  ["Minimum Free Agent Salary", "$250,000"],
+  ["Minimum Retained RFA Salary", "$250,000"],
   ["Minimum Contract Term", "1 year"],
   ["Maximum Contract Term", "5 years"],
 ];
@@ -85,7 +85,7 @@ export default function Rulebook() {
 
       <RuleSection id="free-agency" number="3" title="Free Agency">
         <p>Free Agency occurs on a mutually agreed date, typically during the NHL pre-season. The exact 2027 GLDHL Free Agency date is to be announced. The default remains at least 7 days before the NHL regular-season opener.</p>
-        <div className="grid gap-4 lg:grid-cols-2"><Subsection title="3.1 Unrestricted Free Agents (UFA)"><RuleList><Rule>A UFA is a player not controlled by any Manager.</Rule><Rule>Conducted via open auction.</Rule><Rule>Highest contract value wins.</Rule><Rule>Tiebreaker: contract delivering money faster.</Rule><Rule>Minimum bid: <strong>$750,000</strong>.</Rule></RuleList></Subsection><Subsection title="3.2 Restricted Free Agents (RFA)"><RuleList><Rule>An RFA is a player controlled by a Manager.</Rule><Rule>Conducted via blind auction.</Rule><Rule>Retaining Manager must declare intent to retain or release.</Rule><Rule>If retained: minimum 1-year contract at 50% of prior AAV.</Rule><Rule>Minimum retained bid: <strong>1 year · $500,000</strong>.</Rule><Rule>If matched, the player stays at the new AAV.</Rule><Rule>If declined, the retaining Manager claims one Prospect from the winning Manager.</Rule></RuleList></Subsection></div>
+        <div className="grid gap-4 lg:grid-cols-2"><Subsection title="3.1 Unrestricted Free Agents (UFA)"><RuleList><Rule>A UFA is a player not controlled by any Manager.</Rule><Rule>Conducted via open auction.</Rule><Rule>Highest contract value wins.</Rule><Rule>Tiebreaker: contract delivering money faster.</Rule><Rule>Minimum bid: <strong>$250,000</strong>.</Rule></RuleList></Subsection><Subsection title="3.2 Restricted Free Agents (RFA)"><RuleList><Rule>An RFA is a player controlled by a Manager.</Rule><Rule>Conducted via blind auction.</Rule><Rule>Retaining Manager must declare intent to retain or release.</Rule><Rule>If retained: minimum 1-year contract at 50% of prior AAV.</Rule><Rule>Minimum retained bid: <strong>1 year · $250,000</strong>.</Rule><Rule>If matched, the player stays at the new AAV.</Rule><Rule>If declined, the retaining Manager claims one Prospect from the winning Manager.</Rule></RuleList></Subsection></div>
       </RuleSection>
 
       <RuleSection id="transaction-windows" number="4" title="Transaction Windows">

@@ -145,7 +145,7 @@ export async function fetchRecordBookData(teamId?: number | null, seasonYear?: n
   const rookieIds = new Set([
     ...(rookies || []).map((row) => Number(row.player_id)),
     ...eligibleSeasons
-      .filter((row) => row.season_year === performanceSeason && row.salary === 500_000 && row.term_end_year === performanceSeason + 2)
+      .filter((row) => row.season_year === performanceSeason && row.salary === 250_000 && row.term_end_year === performanceSeason + 2)
       .map((row) => row.player_id),
   ]);
   const skaterMap = new Map(seasonSkaters.map((row) => [String(row.playerId), row]));

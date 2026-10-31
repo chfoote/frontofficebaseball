@@ -164,7 +164,7 @@ export default function ManagerCommandCenter() {
       row,
       previousSalary,
       previousPosition: rosterPosition(previousSeason?.position || playerProduction(row).position),
-      qualifyingOffer: Math.max(Math.round((previousSalary || 0) * 0.5), 500_000),
+      qualifyingOffer: Math.max(Math.round((previousSalary || 0) * 0.5), 250_000),
     };
   });
   const retainedRfas = restrictedFreeAgents.filter(({ row }) => rfaPlans[row.id]?.retain).map((item) => ({ ...item, plan: rfaPlans[item.row.id] }));
