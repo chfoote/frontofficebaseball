@@ -16,15 +16,12 @@ import {
   DashboardIcon,
   GoalieIcon,
   GoalHornIcon,
-  MarketIcon,
   PlayerAdminIcon,
   ReportIcon,
   SkaterIcon,
   StandingsIcon,
   TeamAdminIcon,
   TeamsIcon,
-  TradeIcon,
-  TransactionsIcon,
 } from "../icons/league";
 import { useSidebar } from "../context/SidebarContext";
 import { useAuth } from "../context/AuthContext";
@@ -67,26 +64,6 @@ const leaguePulseItems: NavItem[] = [
     name: "MLB Scoreboard",
     path: "/scoreboard",
   },
-  {
-    icon: <StandingsIcon />,
-    name: "Power Rankings",
-    path: "/power-rankings",
-  },
-  {
-    icon: <AwardsIcon />,
-    name: "Awards & Honours",
-    path: "/awards",
-  },
-  {
-    icon: <ReportIcon />,
-    name: "League Record Book",
-    path: "/record-book",
-  },
-  {
-    icon: <TransactionsIcon />,
-    name: "Transactions",
-    path: "/transactions",
-  },
 ];
 
 const gmToolItems: NavItem[] = [
@@ -99,31 +76,6 @@ const gmToolItems: NavItem[] = [
     icon: <TeamsIcon />,
     name: "GM Records",
     path: "/gms",
-  },
-  {
-    icon: <ReportIcon />,
-    name: "CBA & Rulebook",
-    path: "/cba",
-  },
-  {
-    icon: <AwardsIcon />,
-    name: "Competitive Balance Draft",
-    path: "/competitive-balance-draft",
-  },
-  {
-    icon: <AuctionIcon />,
-    name: "Auction House",
-    path: "/auction-house",
-  },
-  {
-    icon: <MarketIcon />,
-    name: "Trade Market",
-    path: "/trade-market",
-  },
-  {
-    icon: <TradeIcon />,
-    name: "Trade Manager",
-    path: "/trade-manager",
   },
   {
     icon: <DashboardIcon />,
