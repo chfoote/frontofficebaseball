@@ -53,6 +53,7 @@ import RecordBook from "./pages/League/RecordBook";
 import Rulebook from "./pages/League/Rulebook";
 import CompetitiveBalanceDraft from "./pages/League/CompetitiveBalanceDraft";
 import RosterLab from "./pages/League/RosterLab";
+import LeagueWelcome from "./pages/League/LeagueWelcome";
 
 export default function App() {
   return (
@@ -68,7 +69,8 @@ export default function App() {
 
             {/* Protected Dashboard Layout — requires login */}
             <Route element={<ProtectedRoute />}>
-              <Route index path="/" element={<ManagerCommandCenter />} />
+              <Route index path="/" element={<LeagueWelcome />} />
+              <Route path="/front-office" element={<ManagerCommandCenter />} />
               <Route path="/league-chat" element={<HockeyHome />} />
               <Route path="/scoreboard" element={<Home />} />
 

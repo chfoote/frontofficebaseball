@@ -93,7 +93,7 @@ const gmToolItems: NavItem[] = [
   {
     icon: <DashboardIcon />,
     name: "My Front Office",
-    path: "/",
+    path: "/front-office",
   },
   {
     icon: <TeamsIcon />,
