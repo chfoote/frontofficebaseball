@@ -13,10 +13,20 @@ import { fetchPlayerTradeInterests, type PlayerTradeInterest } from "../../lib/t
 import { fetchTradeOffers, type TradeOffer } from "../../lib/tradeOffers";
 import { fetchLeagueTransactions, type LeagueTransaction } from "../../lib/transactions";
 
-const activePositions = new Set(["C", "LW", "RW", "D", "G"]);
+const activePositions = new Set(["C", "1B", "2B", "SS", "3B", "OF", "DH", "SP", "RP"]);
 const capPositions = new Set([...activePositions, "W", "IR", "RETENTION", "BUYOUT"]);
-const positionMinimums = { C: 3, LW: 3, RW: 3, D: 6, G: 2 } as const;
-const rosterLimit = 23;
+const positionMinimums = [
+  { code: "C", label: "Catcher", minimum: 1 },
+  { code: "1B", label: "First Base", minimum: 1 },
+  { code: "2B", label: "Second Base", minimum: 1 },
+  { code: "SS", label: "Shortstop", minimum: 1 },
+  { code: "3B", label: "Third Base", minimum: 1 },
+  { code: "OF", label: "Outfield", minimum: 3 },
+  { code: "DH", label: "Designated Hitter", minimum: 1 },
+  { code: "SP", label: "Starting Pitcher", minimum: 5 },
+  { code: "RP", label: "Relief Pitcher", minimum: 1 },
+] as const;
+const rosterLimit = 27;
 const money = new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 });
 
 function salaryCap(_year: number) {
@@ -143,9 +153,10 @@ export default function ManagerCommandCenter() {
       qualifyingOffer: Math.max(Math.round((previousSalary || 0) * 0.5), 500_000),
     };
   });
-  const missingPositions = (Object.keys(positionMinimums) as Array<keyof typeof positionMinimums>).map((code) => ({
+  const missingPositions = positionMinimums.map(({ code, label, minimum }) => ({
     code,
-    missing: Math.max(positionMinimums[code] - activeRoster.filter((row) => position(row) === code).length, 0),
+    label,
+    missing: Math.max(minimum - activeRoster.filter((row) => position(row) === code).length, 0),
   })).filter((item) => item.missing > 0);
   const activeAuctions = auctions.filter((auction) => !["completed", "cancelled"].includes(auction.status));
   const pendingOffers = offers.filter((offer) => offer.status === "pending" && [offer.from_team_id, offer.to_team_id, offer.third_team_id].includes(teamId || -1));
@@ -180,7 +191,7 @@ export default function ManagerCommandCenter() {
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <SummaryCard label="Cap Space" value={money.format(capSpace)} detail={`${money.format(payroll)} of ${money.format(salaryCap(season))} used`} tone={capSpace < 0 ? "error" : "success"} />
-      <SummaryCard label="Active Roster" value={`${activeRoster.length} / ${rosterLimit}`} detail={missingPositions.length ? `${missingPositions.map((item) => `${item.code} ${item.missing}`).join(" · ")} still needed` : "Position minimums satisfied"} tone={activeRoster.length > rosterLimit ? "error" : missingPositions.length ? "warning" : "success"} />
+      <SummaryCard label="Active Roster" value={`${activeRoster.length} / ${rosterLimit}`} detail={missingPositions.length ? `${missingPositions.map((item) => `${item.missing} ${item.code}`).join(" · ")} still needed` : "Scoring-position minimums satisfied"} tone={activeRoster.length > rosterLimit ? "error" : missingPositions.length ? "warning" : "success"} />
       <SummaryCard label="Pending Trades" value={String(pendingOffers.length)} detail={offersToReview.length ? `${offersToReview.length} waiting for your response` : "No response required right now"} tone={offersToReview.length ? "warning" : "brand"} />
       <SummaryCard label="Active Auctions" value={String(activeAuctions.length)} detail={activeAuctions.length ? "Bidding is currently active" : "No players currently nominated"} tone={activeAuctions.length ? "warning" : "brand"} />
     </section>
@@ -191,7 +202,7 @@ export default function ManagerCommandCenter() {
         <div className="space-y-3">
           {offersToReview.length > 0 && <ActionItem title={`${offersToReview.length} trade ${offersToReview.length === 1 ? "offer needs" : "offers need"} your response`} detail="Review the players, salary impact, and roster compliance before deciding." link="/trade-manager" linkLabel="Review trades" tone="warning" />}
           {receivedInterest.length > 0 && <ActionItem title={`${receivedInterest.length} expression${receivedInterest.length === 1 ? "" : "s"} of trade interest`} detail="Other managers have shown interest in players on your roster." link="/trade-market" linkLabel="View interest" />}
-          {missingPositions.length > 0 && <ActionItem title="Your roster has open positions" detail={`Still needed: ${missingPositions.map((item) => `${item.missing} ${item.code}`).join(", ")}.`} link="/trade-market" linkLabel="Find players" tone="error" />}
+          {missingPositions.length > 0 && <ActionItem title="Your roster has open scoring positions" detail={`Still needed: ${missingPositions.map((item) => `${item.missing} ${item.label}`).join(", ")}.`} link="/trade-market" linkLabel="Find players" tone="error" />}
           {restrictedFreeAgents.length > 0 && <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-500/30 dark:bg-violet-500/10">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"><div><p className="font-semibold text-violet-900 dark:text-violet-200">{restrictedFreeAgents.length} RFA decision{restrictedFreeAgents.length === 1 ? "" : "s"} due now</p><p className="mt-0.5 text-sm text-violet-700/80 dark:text-violet-300/80">These contracts have already expired. A qualifying offer keeps the player’s rights for one year.</p></div><Link to="/auction-house" className="shrink-0 text-sm font-semibold text-violet-700 hover:underline dark:text-violet-300">Review RFA rights →</Link></div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">{restrictedFreeAgents.map(({ row, previousSalary, qualifyingOffer }) => <div key={row.id} className="rounded-lg border border-violet-200 bg-white px-3 py-2.5 dark:border-violet-500/30 dark:bg-gray-900"><p className="text-sm font-bold text-gray-900 dark:text-white">{playerName(row)}</p><p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{season - 1} salary: <strong className="text-gray-700 dark:text-gray-200">{previousSalary === null ? "Unavailable" : money.format(previousSalary)}</strong></p><p className="mt-0.5 text-xs font-semibold text-violet-700 dark:text-violet-300">Qualifying offer: {money.format(qualifyingOffer)} · 1 year</p></div>)}</div>
