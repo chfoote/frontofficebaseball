@@ -54,6 +54,7 @@ import Rulebook from "./pages/League/Rulebook";
 import CompetitiveBalanceDraft from "./pages/League/CompetitiveBalanceDraft";
 import RosterLab from "./pages/League/RosterLab";
 import LeagueWelcome from "./pages/League/LeagueWelcome";
+import UpcomingRfas from "./pages/League/UpcomingRfas";
 
 export default function App() {
   return (
@@ -87,6 +88,7 @@ export default function App() {
               <Route path="/baseball-player-profile" element={<BaseballPlayerProfile />} />
               <Route path="/trade-manager" element={<TradeManager />} />
               <Route path="/roster-lab" element={<RosterLab />} />
+              <Route path="/upcoming-rfas" element={<UpcomingRfas />} />
               <Route path="/trade-market" element={<TradeMarket />} />
               <Route path="/auction-house" element={<AuctionHouse />} />
               <Route path="/league-dashboard" element={<LeagueDashboard />} />

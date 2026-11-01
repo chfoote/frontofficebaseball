@@ -77,6 +77,11 @@ const gmToolItems: NavItem[] = [
     name: "Roster Lab",
     path: "/roster-lab",
   },
+  {
+    icon: <SkaterIcon />,
+    name: "Upcoming RFAs",
+    path: "/upcoming-rfas",
+  },
 ];
 
 const communityItems: NavItem[] = [

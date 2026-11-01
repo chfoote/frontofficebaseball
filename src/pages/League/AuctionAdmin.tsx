@@ -125,7 +125,6 @@ export default function AuctionAdmin() {
   const [auctionType, setAuctionType] = useState<"ufa"|"rfa">("ufa");
   const [rosterPosition, setRosterPosition] = useState("C");
   const [rfaQualified, setRfaQualified] = useState(true);
-  const [allow500Minimum, setAllow500Minimum] = useState(false);
   const [isTestAuction, setIsTestAuction] = useState(false);
   const [savingAuction, setSavingAuction] = useState(false);
 
@@ -260,7 +259,7 @@ export default function AuctionAdmin() {
   const selectedPlayer = selectedOption?.player || null;
   const previousNominee = selectedPlayer ? previousPlayerSeasons.find((row) => row.player_id === selectedPlayer.id) : undefined;
   const requiredQualifyingAav = Math.max(Math.round((previousNominee?.salary||0)*0.5),250000);
-  async function selectNominee(value:string){setNomineeId(value);const option=nomineeOptions.find(item=>item.value===value);const row=option?.player?playerSeasons.find(item=>item.player_id===option.player!.id):undefined;const storedPosition=(row?.position||"").toUpperCase();const isRfa=storedPosition==="RFA";setAuctionType(isRfa?"rfa":"ufa");setAllow500Minimum(isRfa);setRfaQualified(true);if(option&&positionOrder.includes(option.position)){setRosterPosition(option.position);return;}if(option?.playerApiId){try{const landing=await fetchNhlPlayerLanding(Number(option.playerApiId));const position=normalizePosition(landing.position);if(positionOrder.includes(position))setRosterPosition(position);}catch{/* Position remains editable if NHL data is unavailable. */}}}
+  async function selectNominee(value:string){setNomineeId(value);const option=nomineeOptions.find(item=>item.value===value);const row=option?.player?playerSeasons.find(item=>item.player_id===option.player!.id):undefined;const storedPosition=(row?.position||"").toUpperCase();const isRfa=storedPosition==="RFA";setAuctionType(isRfa?"rfa":"ufa");setRfaQualified(true);if(option&&positionOrder.includes(option.position)){setRosterPosition(option.position);return;}if(option?.playerApiId){try{const landing=await fetchNhlPlayerLanding(Number(option.playerApiId));const position=normalizePosition(landing.position);if(positionOrder.includes(position))setRosterPosition(position);}catch{/* Position remains editable if NHL data is unavailable. */}}}
   async function handleNominate() {
     if (!user || !selectedOption) return;
     setSavingAuction(true);
@@ -295,7 +294,6 @@ export default function AuctionAdmin() {
       setSuccess(prefix + (effectiveType === "rfa" ? `Qualified RFA nominated with a one-year $${requiredQualifyingAav.toLocaleString()} rights-owner offer. Sealed bidding is open for 90 seconds.` : `Player nominated for open UFA bidding at a $${minimumAav.toLocaleString()} minimum.`));
       setNomineeId("");
       setIsTestAuction(false);
-      setAllow500Minimum(false);
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to nominate player.");
@@ -523,15 +521,12 @@ export default function AuctionAdmin() {
               </select>
               <p className="mt-1 text-xs text-gray-500">Franchise players are grouped first by team and position. True UFAs have no roster owner or active prospect rights.</p>
             </div>
-            <div><label className="mb-1 block text-xs font-semibold uppercase text-gray-500">Type</label><select value={auctionType} onChange={e=>{const next=e.target.value as "ufa"|"rfa";setAuctionType(next);setAllow500Minimum(next==="rfa");}} className="h-11 w-full rounded-lg border border-gray-300 px-3 dark:border-gray-700 dark:bg-gray-900"><option value="ufa">UFA — Open</option><option value="rfa">RFA — Blind</option></select></div>
+            <div><label className="mb-1 block text-xs font-semibold uppercase text-gray-500">Type</label><select value={auctionType} onChange={e=>setAuctionType(e.target.value as "ufa"|"rfa")} className="h-11 w-full rounded-lg border border-gray-300 px-3 dark:border-gray-700 dark:bg-gray-900"><option value="ufa">UFA — Open</option><option value="rfa">RFA — Blind</option></select></div>
             <div><label className="mb-1 block text-xs font-semibold uppercase text-gray-500">Roster Position</label><select value={rosterPosition} onChange={e=>setRosterPosition(e.target.value)} className="h-11 w-full rounded-lg border border-gray-300 px-3 dark:border-gray-700 dark:bg-gray-900">{["C","LW","RW","D","G"].map(p=><option key={p}>{p}</option>)}</select></div>
             <div><label className="mb-1 block text-xs font-semibold uppercase text-gray-500">{auctionType==="rfa"?"Qualifying":"UFA Timer"}</label>{auctionType==="rfa"?<label className="flex h-11 cursor-pointer items-center gap-3 rounded-lg border border-gray-300 px-3 dark:border-gray-700"><input type="checkbox" checked={rfaQualified} onChange={e=>setRfaQualified(e.target.checked)} className="h-5 w-5 rounded border-gray-300 text-brand-500"/><span className="text-sm font-semibold">Qualified · ${requiredQualifyingAav.toLocaleString()} / 1 year</span></label>:<div className="flex h-11 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-700">60 seconds · resets to 45 when below 45</div>}</div>
             {auctionType==="rfa"&&<div><label className="mb-1 block text-xs font-semibold uppercase text-gray-500">Auction Result</label><div className={`flex h-11 items-center rounded-lg border px-3 text-sm font-medium ${rfaQualified?"border-violet-200 bg-violet-50 text-violet-700":"border-brand-200 bg-brand-50 text-brand-700"}`}>{rfaQualified?"90-second blind RFA":"60-second open UFA"}</div></div>}
           </div>
-          <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${allow500Minimum?"border-success-300 bg-success-50 dark:border-success-500/50 dark:bg-success-500/10":"border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
-            <input type="checkbox" checked={allow500Minimum} onChange={e=>setAllow500Minimum(e.target.checked)} className="mt-0.5 h-5 w-5 rounded border-gray-300 text-success-600"/>
-            <span><span className="block text-sm font-bold text-gray-900 dark:text-white">Use the $250,000 league minimum</span><span className="mt-1 block text-xs text-gray-600 dark:text-gray-300">All MLB contracts and qualifying offers use a $250,000 salary floor.</span></span>
-          </label>
+          <div className="mt-4 rounded-xl border border-success-300 bg-success-50 p-4 dark:border-success-500/50 dark:bg-success-500/10"><span className="block text-sm font-bold text-gray-900 dark:text-white">$250,000 league minimum</span><span className="mt-1 block text-xs text-gray-600 dark:text-gray-300">Applied automatically to all MLB contracts and qualifying offers.</span></div>
           <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border p-4 ${isTestAuction?"border-amber-300 bg-amber-50 dark:border-amber-500/50 dark:bg-amber-500/10":"border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
             <input type="checkbox" checked={isTestAuction} onChange={e=>setIsTestAuction(e.target.checked)} className="mt-0.5 h-5 w-5 rounded border-gray-300 text-amber-500"/>
             <span><span className="block text-sm font-bold text-gray-900 dark:text-white">TEST auction — practice only</span><span className="mt-1 block text-xs text-gray-600 dark:text-gray-300">Runs the complete bidding experience, but does not change rosters or contracts and does not post a website or Discord transaction.</span></span>
