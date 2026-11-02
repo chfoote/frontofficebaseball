@@ -82,6 +82,11 @@ const gmToolItems: NavItem[] = [
     name: "Upcoming RFAs",
     path: "/upcoming-rfas",
   },
+  {
+    icon: <SkaterIcon />,
+    name: "Upcoming UFAs",
+    path: "/upcoming-ufas",
+  },
 ];
 
 const communityItems: NavItem[] = [
