@@ -86,6 +86,7 @@ export async function fetchMlbFarmProspects(affiliates: MlbAffiliate[], throughY
   const fallbackSignings: MlbFarmProspect[] = [
     { key: "signed:walcott", playerName: "Sebastian Walcott", position: "SS", birthDate: "2006-03-14", organizationId: 140, organizationName: "Texas Rangers", acquiredYear: 2023, source: "INTERNATIONAL" },
     { key: "signed:murakami", playerName: "Munetaka Murakami", position: "3B", birthDate: "2000-02-02", organizationId: 145, organizationName: "Chicago White Sox", acquiredYear: 2026, source: "OTHER" },
+    { key: "signed:rocchio", playerId: 677587, playerName: "Brayan Rocchio", position: "SS", birthDate: "2001-01-13", organizationId: 114, organizationName: "Cleveland Guardians", acquiredYear: 2017, source: "INTERNATIONAL" },
   ];
   const signed = signingsResult.error
     ? fallbackSignings.filter((row) => (organizationIds.has(row.organizationId) || acquiredNameKeys.has(ownershipNameKey(row.playerName))) && row.acquiredYear <= throughYear)
