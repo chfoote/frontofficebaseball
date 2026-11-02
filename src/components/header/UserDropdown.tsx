@@ -4,12 +4,16 @@ import { Dropdown } from "../ui/dropdown/Dropdown";
 import { useNavigate } from "react-router";
 import { useAuth } from "../../context/AuthContext";
 import { fetchProfile } from "../../lib/profiles";
+import { CURRENT_LEAGUE_SEASON } from "../../lib/leagueSeasons";
+import { fetchLatestUserTeamAssignment, fetchUserTeamAssignment } from "../../lib/teamUserAssignments";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [profileName, setProfileName] = useState("");
+  const [teamLogo, setTeamLogo] = useState<string | null>(null);
+  const [teamName, setTeamName] = useState("");
 
   const firstName = (user?.user_metadata?.first_name as string) || "";
   const lastName = (user?.user_metadata?.last_name as string) || "";
@@ -19,9 +23,21 @@ export default function UserDropdown() {
   useEffect(() => {
     if (!user) {
       setProfileName("");
+      setTeamLogo(null);
+      setTeamName("");
       return;
     }
     fetchProfile(user.id).then((profile) => setProfileName(profile?.display_name?.trim() || "")).catch(() => setProfileName(""));
+    fetchUserTeamAssignment(user.id, CURRENT_LEAGUE_SEASON)
+      .then((assignment) => assignment || fetchLatestUserTeamAssignment(user.id))
+      .then((assignment) => {
+        setTeamLogo(assignment?.fantasy_team?.logo || null);
+        setTeamName(assignment?.fantasy_team?.team_name || "");
+      })
+      .catch(() => {
+        setTeamLogo(null);
+        setTeamName("");
+      });
   }, [user]);
 
   const avatarInitials = fullName.replace(/@.*$/, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "GL";
@@ -58,8 +74,8 @@ export default function UserDropdown() {
         onClick={toggleDropdown}
         className="flex items-center text-gray-700 dropdown-toggle dark:text-gray-400"
       >
-        <span className="mr-3 flex h-11 w-11 items-center justify-center rounded-full bg-brand-50 text-sm font-bold text-brand-600 dark:bg-brand-500/15 dark:text-brand-300" aria-hidden="true">
-          {avatarInitials}
+        <span className="mr-3 flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border border-gray-200 bg-white p-1 text-sm font-bold text-brand-600 shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-brand-300" aria-hidden="true">
+          {teamLogo ? <img src={teamLogo} alt="" className="h-full w-full object-contain" /> : avatarInitials}
         </span>
 
         <span className="block mr-1 font-medium text-theme-sm">{fullName}</span>
@@ -95,6 +111,7 @@ export default function UserDropdown() {
           <span className="mt-0.5 block text-theme-xs text-gray-500 dark:text-gray-400">
             {email}
           </span>
+          {teamName && <span className="mt-1 block text-theme-xs font-semibold text-brand-500 dark:text-brand-300">{teamName}</span>}
         </div>
 
         <ul className="flex flex-col gap-1 pt-4 pb-3 border-b border-gray-200 dark:border-gray-800">

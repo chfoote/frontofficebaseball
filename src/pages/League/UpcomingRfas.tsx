@@ -31,16 +31,36 @@ function pitcherRole(record: MlbStatRecord | null) { const games = Number(record
 function batterPosition(value: string) { const code = value.toUpperCase(); return ["LF", "CF", "RF"].includes(code) ? "OF" : code; }
 function displayPosition(item: RfaRow) { return item.pitcher ? pitcherRole(item.stats) : batterPosition(item.previous?.position || item.stats?.position || "—"); }
 
-function PlayerList({ title, subtitle, rows, pitcher, needs, contractYear, expired }: { title: string; subtitle: string; rows: RfaRow[]; pitcher: boolean; needs: Set<string>; contractYear: number; expired: boolean }) {
+const scoringSlots = [
+  ...["C", "1B", "2B", "SS", "3B", "DH"].map((position) => ({ key: position, position, index: 0 })),
+  ...Array.from({ length: 3 }, (_, index) => ({ key: `OF${index + 1}`, position: "OF", index })),
+  ...Array.from({ length: 5 }, (_, index) => ({ key: `SP${index + 1}`, position: "SP", index })),
+  { key: "RP", position: "RP", index: 0 },
+];
+
+function median(values: number[]) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+type TeamNeeds = {
+  open: Set<string>;
+  upgrades: Set<string>;
+  upgradeSlots: string[];
+};
+
+function PlayerList({ title, subtitle, rows, pitcher, needs, contractYear, expired }: { title: string; subtitle: string; rows: RfaRow[]; pitcher: boolean; needs: TeamNeeds; contractYear: number; expired: boolean }) {
   const [positionFilter, setPositionFilter] = useState("ALL");
   const options = pitcher ? ["SP", "RP"] : ["C", "1B", "2B", "SS", "3B", "OF", "DH"];
   const filteredRows = positionFilter === "ALL" ? rows : rows.filter((item) => displayPosition(item) === positionFilter);
   const unownedPool = rows.length > 0 && rows.every((item) => !item.current && !item.previous);
   return <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
     <div className="border-b border-gray-200 px-5 py-4 dark:border-gray-800"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-violet-500">{unownedPool ? "Unowned · no prospect rights" : `${contractYear} contracts ${expired ? "expired" : "expiring"}`}</p><h2 className="text-xl font-black text-gray-900 dark:text-white">{title}</h2><p className="mt-1 text-xs text-gray-500">{subtitle}</p></div><select aria-label={`Filter ${title} by position`} value={positionFilter} onChange={(event) => setPositionFilter(event.target.value)} className="h-9 rounded-lg border border-gray-300 bg-white px-2 text-xs font-bold dark:border-gray-700 dark:bg-gray-900"><option value="ALL">All</option>{options.map((position) => <option key={position} value={position}>{position}</option>)}</select></div></div>
-    <div className="divide-y divide-gray-100 dark:divide-gray-800">{filteredRows.map((item, index) => { const team = item.current?.fantasy_team || item.previous?.fantasy_team; const apiId = item.playerId; const ppg = item.games ? item.score / item.games : 0; const playerPosition = displayPosition(item); const goodFit = needs.has(playerPosition); const headshot = apiId ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_120,q_auto:best,f_auto/v1/people/${apiId}/headshot/67/current` : ""; const teamLogo = team?.logo || item.stats?.teamLogoUrl; const contract = item.previous?.salary == null ? "No salary" : `${money.format(item.previous.salary)} · ${expired ? "expired" : "expires"} ${contractYear}`; return <article key={`${pitcher ? "p" : "b"}-${apiId || item.playerName}`} className={`relative flex min-h-[68px] items-center gap-2.5 px-3 py-2 transition hover:bg-violet-50/40 dark:hover:bg-white/[0.025] ${goodFit ? "bg-emerald-50/70 dark:bg-emerald-500/[0.07]" : index % 2 === 0 ? "bg-gray-50/55 dark:bg-white/[0.015]" : ""}`}>
+    <div className="divide-y divide-gray-100 dark:divide-gray-800">{filteredRows.map((item, index) => { const team = item.current?.fantasy_team || item.previous?.fantasy_team; const apiId = item.playerId; const ppg = item.games ? item.score / item.games : 0; const playerPosition = displayPosition(item); const openFit = needs.open.has(playerPosition); const upgradeFit = !openFit && needs.upgrades.has(playerPosition); const headshot = apiId ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_120,q_auto:best,f_auto/v1/people/${apiId}/headshot/67/current` : ""; const teamLogo = team?.logo || item.stats?.teamLogoUrl; const contract = item.previous?.salary == null ? "No salary" : `${money.format(item.previous.salary)} · ${expired ? "expired" : "expires"} ${contractYear}`; return <article key={`${pitcher ? "p" : "b"}-${apiId || item.playerName}`} className={`relative flex min-h-[68px] items-center gap-2.5 px-3 py-2 transition hover:bg-violet-50/40 dark:hover:bg-white/[0.025] ${openFit ? "bg-emerald-50/70 dark:bg-emerald-500/[0.07]" : upgradeFit ? "bg-amber-50/65 dark:bg-amber-500/[0.06]" : index % 2 === 0 ? "bg-gray-50/55 dark:bg-white/[0.015]" : ""}`}>
       <div className="relative flex h-12 w-12 shrink-0 items-end justify-center overflow-hidden rounded-full bg-gradient-to-b from-gray-100 to-gray-200 ring-1 ring-gray-200 dark:from-gray-800 dark:to-gray-900 dark:ring-gray-700"><span className="absolute inset-0 flex items-center justify-center text-[10px] font-black text-gray-400">{item.playerName.split(" ").map((part) => part[0]).join("").slice(0, 2)}</span>{headshot && <img src={headshot} alt={`${item.playerName} headshot`} onError={(event) => { event.currentTarget.style.display = "none"; }} className="relative z-10 h-full w-full object-contain object-bottom" />}</div>
-      <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5">{apiId ? <Link to={`/baseball-player-profile?playerId=${apiId}&type=${pitcher ? "pitching" : "hitting"}`} className="truncate text-sm font-black text-gray-900 hover:text-brand-600 dark:text-white">{item.playerName}</Link> : <p className="truncate text-sm font-black">{item.playerName}</p>}<span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[8px] font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">{playerPosition}</span>{goodFit && <span title="Fills an open scoring position on your roster" className="shrink-0 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[7px] font-black uppercase text-white">Fit</span>}</div>
+      <div className="min-w-0 flex-1"><div className="flex min-w-0 items-center gap-1.5">{apiId ? <Link to={`/baseball-player-profile?playerId=${apiId}&type=${pitcher ? "pitching" : "hitting"}`} className="truncate text-sm font-black text-gray-900 hover:text-brand-600 dark:text-white">{item.playerName}</Link> : <p className="truncate text-sm font-black">{item.playerName}</p>}<span className="shrink-0 rounded bg-gray-100 px-1.5 py-0.5 text-[8px] font-black text-gray-600 dark:bg-gray-800 dark:text-gray-300">{playerPosition}</span>{openFit && <span title="Fills an open scoring position on your roster" className="shrink-0 rounded-full bg-emerald-600 px-1.5 py-0.5 text-[7px] font-black uppercase text-white">Need</span>}{upgradeFit && <span title={`Your ${playerPosition} production was below the ${contractYear} league median`} className="shrink-0 rounded-full bg-amber-500 px-1.5 py-0.5 text-[7px] font-black uppercase text-white">Upgrade</span>}</div>
         <p className="truncate text-[9px] font-semibold text-gray-500 dark:text-gray-400">{pitcher ? `${stat(item.stats, "wins")} W · ${stat(item.stats, "strikeOuts")} K · ${stat(item.stats, "saves")} SV · ${stat(item.stats, "era")} ERA` : `${stat(item.stats, "homeRuns")} HR · ${stat(item.stats, "rbi")} RBI · ${stat(item.stats, "stolenBases")} SB · ${stat(item.stats, "hits")} H`} <span className="text-gray-300 dark:text-gray-600">|</span> {contract}</p>
       </div>
       <div className="w-12 shrink-0 text-right"><p className="text-sm font-black text-brand-600 dark:text-brand-300">{number.format(item.score)}</p><p className="text-[8px] font-black uppercase tracking-wide text-gray-400">{number.format(ppg)} PPG</p></div>
@@ -91,13 +111,37 @@ export function FreeAgentTracker({ kind }: { kind: "RFA" | "UFA" }) {
     }).sort((a, b) => b.score - a.score || a.playerName.localeCompare(b.playerName));
   }, [currentRows, hitters, kind, pitchers, previousRows, previousYear, prospectOwners]);
 
-  const needs = useMemo(() => {
-    if (!viewerTeamId) return new Set<string>();
+  const needs = useMemo<TeamNeeds>(() => {
+    if (!viewerTeamId) return { open: new Set(), upgrades: new Set(), upgradeSlots: [] };
     const minimums: Record<string, number> = { C: 1, "1B": 1, "2B": 1, SS: 1, "3B": 1, OF: 3, DH: 1, SP: 5, RP: 1 };
     const counts: Record<string, number> = {};
     currentRows.filter((row) => row.fantasy_team_id === viewerTeamId).forEach((row) => { const position = (row.position || "").toUpperCase(); if (position in minimums) counts[position] = (counts[position] || 0) + 1; });
-    return new Set(Object.entries(minimums).filter(([position, minimum]) => (counts[position] || 0) < minimum).map(([position]) => position));
-  }, [currentRows, viewerTeamId]);
+    const open = new Set(Object.entries(minimums).filter(([position, minimum]) => (counts[position] || 0) < minimum).map(([position]) => position));
+    const hitterStats = new Map(hitters.map((record) => [String(record.playerId), record]));
+    const pitcherStats = new Map(pitchers.map((record) => [String(record.playerId), record]));
+    const teamIds = [...new Set(previousRows.map((row) => row.fantasy_team_id).filter((id): id is number => Boolean(id)))];
+    const slotScores = new Map<number, Record<string, number>>();
+    teamIds.forEach((teamId) => {
+      const teamPlayers = previousRows.filter((row) => row.fantasy_team_id === teamId);
+      const scores: Record<string, number> = {};
+      scoringSlots.forEach((slot) => {
+        const statMap = slot.position === "SP" || slot.position === "RP" ? pitcherStats : hitterStats;
+        const getScore = slot.position === "SP" || slot.position === "RP" ? pitcherScore : batterScore;
+        scores[slot.key] = teamPlayers
+          .filter((row) => (row.position || "").toUpperCase() === slot.position)
+          .map((row) => statMap.get(String(row.player?.player_api_id || "")))
+          .filter((record): record is MlbStatRecord => Boolean(record))
+          .map(getScore)
+          .sort((a, b) => b - a)[slot.index] || 0;
+      });
+      slotScores.set(teamId, scores);
+    });
+    const viewerScores = slotScores.get(viewerTeamId) || {};
+    const upgradeSlots = scoringSlots
+      .filter((slot) => (viewerScores[slot.key] || 0) < median(teamIds.map((teamId) => slotScores.get(teamId)?.[slot.key] || 0)))
+      .map((slot) => slot.key);
+    return { open, upgrades: new Set(upgradeSlots.map((slot) => slot.replace(/\d+$/, ""))), upgradeSlots };
+  }, [currentRows, hitters, pitchers, previousRows, viewerTeamId]);
 
   const batters = rows.filter((row) => !row.pitcher);
   const pitching = rows.filter((row) => row.pitcher);
@@ -105,7 +149,7 @@ export function FreeAgentTracker({ kind }: { kind: "RFA" | "UFA" }) {
   if (error) return <div className="rounded-2xl border border-error-200 bg-error-50 p-5 text-error-700">{error}</div>;
   const fullName = kind === "RFA" ? "Restricted Free Agents" : "Unrestricted Free Agents";
   return <div className="space-y-6"><PageMeta title={`Upcoming ${kind}s | Season ${season}`} description={`Players entering ${fullName.toLowerCase()} for ${season}`} />
-    <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-violet-950 via-slate-950 to-brand-950 p-6 text-white shadow-xl sm:p-8"><p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">{season} Offseason</p><h1 className="mt-2 text-3xl font-black">Upcoming {fullName}</h1><p className="mt-2 max-w-3xl text-sm text-slate-300">{kind === "RFA" ? `Players whose contracts expired after the ${previousYear} season and whose RFA rights are currently held by a franchise.` : "The current free-agent pool: players who are not on a fantasy roster and do not have active farm-system or acquired-prospect rights."}</p><div className="mt-5 flex flex-wrap gap-3"><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{batters.length} batters</span><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{pitching.length} pitchers</span>{needs.size > 0 && <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-200">Your needs: {[...needs].join(", ")}</span>}</div></section>
+    <section className="overflow-hidden rounded-3xl bg-gradient-to-br from-violet-950 via-slate-950 to-brand-950 p-6 text-white shadow-xl sm:p-8"><p className="text-xs font-black uppercase tracking-[0.2em] text-violet-300">{season} Offseason</p><h1 className="mt-2 text-3xl font-black">Upcoming {fullName}</h1><p className="mt-2 max-w-3xl text-sm text-slate-300">{kind === "RFA" ? `Players whose contracts expired after the ${previousYear} season and whose RFA rights are currently held by a franchise.` : "The current free-agent pool: players who are not on a fantasy roster and do not have active farm-system or acquired-prospect rights."}</p><div className="mt-5 flex flex-wrap gap-3"><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{batters.length} batters</span><span className="rounded-full bg-white/10 px-3 py-1 text-xs font-black">{pitching.length} pitchers</span>{needs.open.size > 0 && <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-black text-emerald-200">Open roster needs: {[...needs.open].join(", ")}</span>}{needs.upgradeSlots.length > 0 && <span className="rounded-full bg-amber-500/20 px-3 py-1 text-xs font-black text-amber-200">Below {previousYear} median: {needs.upgradeSlots.join(", ")}</span>}</div></section>
     <div className="grid items-start gap-6 xl:grid-cols-2"><PlayerList title={`${kind} Batters`} subtitle={`Ranked by ${previousYear} fantasy score.`} rows={batters} pitcher={false} needs={needs} contractYear={kind === "RFA" ? previousYear : season} expired={kind === "RFA"} /><PlayerList title={`${kind} Pitchers`} subtitle={`Ranked by ${previousYear} fantasy score.`} rows={pitching} pitcher needs={needs} contractYear={kind === "RFA" ? previousYear : season} expired={kind === "RFA"} /></div>
   </div>;
 }
