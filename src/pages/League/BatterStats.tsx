@@ -116,7 +116,7 @@ function PlayerCell({
         )}
       </div>
       <div className="text-left">
-        <div className="flex flex-wrap items-center gap-1.5">{name}{promotionLabel && <span title={promotionLabel} aria-label={promotionLabel} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[10px] font-black text-amber-600 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">▲</span>}{ageOutDays !== null && ageOutDays <= 90 && <span title={`Prospect rights expire in ${ageOutDays} day${ageOutDays === 1 ? "" : "s"} when the player turns 27.`} className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ring-1 ${ageOutDays <= 30 ? "bg-red-50 text-red-600 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30" : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30"}`}>Ages out &lt;{ageOutDays <= 30 ? "30" : "90"}d</span>}</div>
+        <div className="flex flex-wrap items-center gap-1.5">{name}{promotionLabel && <span title={promotionLabel} aria-label={promotionLabel} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[10px] font-black text-amber-600 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">▲</span>}{ageOutDays !== null && ageOutDays <= 90 && <span title={`Prospect rights expire in ${ageOutDays} day${ageOutDays === 1 ? "" : "s"} when the player turns 27.`} className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ring-1 ${ageOutDays <= 30 ? "bg-red-50 text-red-600 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30" : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30"}`}>Less than {ageOutDays <= 30 ? "30" : "90"} days</span>}</div>
         <p className="mt-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">
           {isProspect && fantasyTeam ? `${fantasyTeam.abbreviation} Prospect` : [record.teamAbbreviation, formatSalary(fantasySeason?.salary), fantasySeason?.term_end_year]
             .filter(Boolean)
@@ -139,6 +139,7 @@ export default function BatterStats() {
   const [teamFilter, setTeamFilter] = useState("all");
   const [positionFilter, setPositionFilter] = useState("all");
   const [ownershipFilter, setOwnershipFilter] = useState("all");
+  const [ageOutFilter, setAgeOutFilter] = useState("all");
   const [minimumAge, setMinimumAge] = useState("");
   const [maximumAge, setMaximumAge] = useState("");
   const [sortKey, setSortKey] = useState<BatterSortKey>("score");
@@ -227,6 +228,7 @@ export default function BatterStats() {
     const ownerId = season?.fantasy_team_id || prospect?.team.id;
     const activeRoster = Boolean(season?.fantasy_team_id && !["AP", "PROSPECT"].includes((season.position || "").toUpperCase()));
     const prospectOnly = Boolean(prospect && !activeRoster);
+    const ageOutDays = prospectOnly ? daysUntilProspectAgeOut(prospect?.birthDate) : null;
     if (teamFilter !== "all" && String(ownerId || "") !== teamFilter) return false;
     if (positionFilter !== "all" && batterPosition(record) !== positionFilter) return false;
     const age = Number(record.stats.age);
@@ -235,13 +237,15 @@ export default function BatterStats() {
     if (ownershipFilter === "owned" && !ownerId) return false;
     if (ownershipFilter === "unowned" && ownerId) return false;
     if (ownershipFilter === "prospect" && !prospectOnly) return false;
+    if (ageOutFilter === "30" && (ageOutDays === null || ageOutDays > 30)) return false;
+    if (ageOutFilter === "90" && (ageOutDays === null || ageOutDays > 90)) return false;
     return true;
   }).sort((a, b) => {
     const aValue = batterSortValue(a, sortKey);
     const bValue = batterSortValue(b, sortKey);
     const comparison = typeof aValue === "string" ? aValue.localeCompare(String(bValue)) : aValue - Number(bValue);
     return sortDirection === "asc" ? comparison : -comparison;
-  }), [records, fantasySeasons, prospectOwners, teamFilter, positionFilter, ownershipFilter, minimumAge, maximumAge, sortKey, sortDirection]);
+  }), [records, fantasySeasons, prospectOwners, teamFilter, positionFilter, ownershipFilter, ageOutFilter, minimumAge, maximumAge, sortKey, sortDirection]);
 
   function handleSort(key: BatterSortKey) {
     if (key === sortKey) setSortDirection((current) => current === "desc" ? "asc" : "desc");
@@ -260,16 +264,17 @@ export default function BatterStats() {
           <p className="text-sm text-gray-500 dark:text-gray-400 sm:text-base">
             Live MLB hitting data from the official stats API.
           </p>
-          <p className="mt-2 text-xs text-gray-400"><span className="mr-1 text-amber-500">▲</span>Prospect score meets the active-roster promotion benchmark for that position.</p>
+          <p className="mt-2 text-xs text-gray-400"><span className="mr-1 text-amber-500">▲</span>Prospect score meets the active-roster promotion benchmark for that position. <span className="ml-2 font-bold text-red-500">Less than 30 days</span> and <span className="font-bold text-amber-600">less than 90 days</span> flag rights nearing age 27.</p>
         </div>
 
         {loading && <p className="text-sm text-gray-500 dark:text-gray-400">Loading batter stats…</p>}
         {error && <p className="text-sm text-red-500">{error}</p>}
 
-        {!loading && !error && <div className="mb-5 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900/60 sm:grid-cols-2 lg:grid-cols-4">
+        {!loading && !error && <div className="mb-5 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900/60 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-xs font-semibold uppercase text-gray-500">Fantasy Team<select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All teams</option>{fantasyTeams.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
           <label className="text-xs font-semibold uppercase text-gray-500">Position<select value={positionFilter} onChange={(event) => setPositionFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All positions</option>{positions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
           <label className="text-xs font-semibold uppercase text-gray-500">Ownership<select value={ownershipFilter} onChange={(event) => setOwnershipFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All players</option><option value="owned">Owned</option><option value="prospect">Prospects only</option><option value="unowned">Unowned</option></select></label>
+          <label className="text-xs font-semibold uppercase text-gray-500">Age-Out Window<select value={ageOutFilter} onChange={(event) => setAgeOutFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All players</option><option value="30">Less than 30 days</option><option value="90">Less than 90 days</option></select></label>
           <fieldset><legend className="text-xs font-semibold uppercase text-gray-500">Age Range</legend><div className="mt-1.5 grid grid-cols-2 gap-2"><input type="number" min={ageBounds.youngest || undefined} max={maximumAge || ageBounds.oldest || undefined} value={minimumAge} onChange={(event) => setMinimumAge(event.target.value)} placeholder={ageBounds.youngest ? `Min ${ageBounds.youngest}` : "Min"} aria-label="Minimum batter age" className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white" /><input type="number" min={minimumAge || ageBounds.youngest || undefined} max={ageBounds.oldest || undefined} value={maximumAge} onChange={(event) => setMaximumAge(event.target.value)} placeholder={ageBounds.oldest ? `Max ${ageBounds.oldest}` : "Max"} aria-label="Maximum batter age" className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white" /></div></fieldset>
         </div>}
 
