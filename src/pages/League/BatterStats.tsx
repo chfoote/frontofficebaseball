@@ -1,3 +1,8 @@
+import MedianIndicator from "../../components/hockey/MedianIndicator";
+import { useMlbOffseason } from "../../hooks/useMlbOffseason";
+import PositionBadge from "../../components/hockey/PositionBadge";
+import { useMlbEligibility } from "../../hooks/useMlbEligibility";
+import MlbEligibilityBadges from "../../components/hockey/MlbEligibilityBadges";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
@@ -41,6 +46,12 @@ function getBatterPpg(record: MlbStatRecord) {
   return score / gamesPlayed;
 }
 
+function BatterPointsPerGame({ record }: { record: MlbStatRecord }) {
+  const ppg = getBatterPpg(record);
+  if (ppg === null) return <>—</>;
+  return <span className="whitespace-nowrap tabular-nums" title="Points per game (projected fantasy points over 162 games)">{ppg.toFixed(2)} <span className="text-[11px] text-gray-400">({(ppg * 162).toFixed(1)})</span></span>;
+}
+
 function formatSalary(salary: number | null | undefined) {
   return salary === null || salary === undefined
     ? "No salary"
@@ -78,11 +89,13 @@ function PlayerCell({
   fantasySeason,
   prospectOwner,
   promotionLabel,
+  median,
 }: {
   record: MlbStatRecord;
   fantasySeason?: PlayerSeasonWithRelations;
   prospectOwner?: MlbProspectOwner;
   promotionLabel?: string;
+  median?: number;
 }) {
   const fantasyTeam = fantasySeason?.fantasy_team || prospectOwner?.team;
   const isProspect = ["AP", "PROSPECT"].includes((fantasySeason?.position || "").toUpperCase()) || Boolean(!fantasySeason?.fantasy_team_id && prospectOwner);
@@ -116,7 +129,7 @@ function PlayerCell({
         )}
       </div>
       <div className="text-left">
-        <div className="flex flex-wrap items-center gap-1.5">{name}{promotionLabel && <span title={promotionLabel} aria-label={promotionLabel} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[10px] font-black text-amber-600 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">▲</span>}{ageOutDays !== null && ageOutDays <= 90 && <span title={`Prospect rights expire in ${ageOutDays} day${ageOutDays === 1 ? "" : "s"} when the player turns 27.`} className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ring-1 ${ageOutDays <= 30 ? "bg-red-50 text-red-600 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30" : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30"}`}>Less than {ageOutDays <= 30 ? "30" : "90"} days</span>}</div>
+        <div className="flex flex-wrap items-center gap-1.5">{name}{Number(record.stats.gamesPlayed || 0) > 0 && <MedianIndicator score={getBatterScore(record)} median={median} position={batterPosition(record)} season={SEASON_YEAR} />}{promotionLabel && <span title={promotionLabel} aria-label={promotionLabel} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[10px] font-black text-amber-600 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">▲</span>}{ageOutDays !== null && ageOutDays <= 90 && <span title={`Prospect rights expire in ${ageOutDays} day${ageOutDays === 1 ? "" : "s"} when the player turns 27.`} className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ring-1 ${ageOutDays <= 30 ? "bg-red-50 text-red-600 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30" : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30"}`}>Less than {ageOutDays <= 30 ? "30" : "90"} days</span>}</div>
         <p className="mt-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">
           {isProspect && fantasyTeam ? `${fantasyTeam.abbreviation} Prospect` : [record.teamAbbreviation, formatSalary(fantasySeason?.salary), fantasySeason?.term_end_year]
             .filter(Boolean)
@@ -138,6 +151,9 @@ export default function BatterStats() {
   const [error, setError] = useState<string | null>(null);
   const [teamFilter, setTeamFilter] = useState("all");
   const [positionFilter, setPositionFilter] = useState("all");
+  const [showEligibility, setShowEligibility] = useState(false);
+  const eligibility = useMlbEligibility(CURRENT_LEAGUE_SEASON);
+  const offseason = useMlbOffseason(SEASON_YEAR);
   const [ownershipFilter, setOwnershipFilter] = useState("all");
   const [ageOutFilter, setAgeOutFilter] = useState("all");
   const [minimumAge, setMinimumAge] = useState("");
@@ -198,10 +214,10 @@ export default function BatterStats() {
     return [...teams].sort((a, b) => a[1].localeCompare(b[1]));
   }, [fantasySeasons, prospectOwners]);
 
-  const positions = useMemo(() => [...new Set(records.map(batterPosition).filter(Boolean))].sort(), [records]);
+  const positions = ["C", "1B", "2B", "SS", "3B", "OF", "DH"];
   const ageBounds = useMemo(() => { const ages = records.map((record) => Number(record.stats.age)).filter((age) => Number.isFinite(age) && age > 0); return { youngest: ages.length ? Math.min(...ages) : 0, oldest: ages.length ? Math.max(...ages) : 0 }; }, [records]);
-  const promotionBenchmarks = useMemo(() => {
-    const scoresByPositionTeam = new Map<string, Map<number, number[]>>([["C", new Map()], ["1B", new Map()], ["2B", new Map()], ["SS", new Map()], ["3B", new Map()]]);
+  const positionalMedians = useMemo(() => {
+    const scoresByPositionTeam = new Map<string, Map<number, number[]>>([["C", new Map()], ["1B", new Map()], ["2B", new Map()], ["SS", new Map()], ["3B", new Map()], ["DH", new Map()]]);
     const outfieldByTeam = new Map<number, number[]>();
     records.forEach((record) => {
       if (!record.playerId) return;
@@ -216,11 +232,13 @@ export default function BatterStats() {
       if (position === "OF") outfieldByTeam.set(season.fantasy_team_id, [...(outfieldByTeam.get(season.fantasy_team_id) || []), score]);
     });
     const result = new Map<string, number>();
-    scoresByPositionTeam.forEach((byTeam, position) => { const value = median([...byTeam.values()].map((values) => Math.max(...values))); if (value !== null) result.set(position, Math.ceil(value)); });
+    scoresByPositionTeam.forEach((byTeam, position) => { const value = median([...byTeam.values()].map((values) => Math.max(...values))); if (value !== null) result.set(position, value); });
     const of3 = median([...outfieldByTeam.values()].filter((values) => values.length >= 3).map((values) => [...values].sort((a, b) => b - a)[2]));
-    if (of3 !== null) result.set("OF", Math.ceil(of3));
+    if (of3 !== null) result.set("OF", of3);
     return result;
   }, [records, benchmarkSeasons]);
+
+  const promotionBenchmarks = useMemo(() => new Map([...positionalMedians].filter(([position]) => position !== "DH").map(([position, value]) => [position, Math.ceil(value)])), [positionalMedians]);
 
   const filteredRecords = useMemo(() => records.filter((record) => {
     const season = record.playerId ? fantasySeasons.get(String(record.playerId)) : undefined;
@@ -230,7 +248,7 @@ export default function BatterStats() {
     const prospectOnly = Boolean(prospect && !activeRoster);
     const ageOutDays = prospectOnly ? daysUntilProspectAgeOut(prospect?.birthDate) : null;
     if (teamFilter !== "all" && String(ownerId || "") !== teamFilter) return false;
-    if (positionFilter !== "all" && batterPosition(record) !== positionFilter) return false;
+    if (positionFilter !== "all" && !eligibility.positions.get(record.playerId || 0)?.some((position) => position === positionFilter)) return false;
     const age = Number(record.stats.age);
     if (minimumAge !== "" && (!Number.isFinite(age) || age < Number(minimumAge))) return false;
     if (maximumAge !== "" && (!Number.isFinite(age) || age > Number(maximumAge))) return false;
@@ -241,11 +259,11 @@ export default function BatterStats() {
     if (ageOutFilter === "90" && (ageOutDays === null || ageOutDays > 90)) return false;
     return true;
   }).sort((a, b) => {
-    const aValue = batterSortValue(a, sortKey);
-    const bValue = batterSortValue(b, sortKey);
+    const aValue = sortKey === "position" ? (eligibility.positions.get(a.playerId || 0) || []).filter((position) => position !== "SP" && position !== "RP").join("/") : batterSortValue(a, sortKey);
+    const bValue = sortKey === "position" ? (eligibility.positions.get(b.playerId || 0) || []).filter((position) => position !== "SP" && position !== "RP").join("/") : batterSortValue(b, sortKey);
     const comparison = typeof aValue === "string" ? aValue.localeCompare(String(bValue)) : aValue - Number(bValue);
     return sortDirection === "asc" ? comparison : -comparison;
-  }), [records, fantasySeasons, prospectOwners, teamFilter, positionFilter, ownershipFilter, ageOutFilter, minimumAge, maximumAge, sortKey, sortDirection]);
+  }), [records, fantasySeasons, prospectOwners, teamFilter, positionFilter, ownershipFilter, ageOutFilter, minimumAge, maximumAge, sortKey, sortDirection, eligibility.positions]);
 
   function handleSort(key: BatterSortKey) {
     if (key === sortKey) setSortDirection((current) => current === "desc" ? "asc" : "desc");
@@ -256,6 +274,8 @@ export default function BatterStats() {
     <div>
       <PageMeta title="Batter Stats | Front Office Baseball League" description="MLB batter statistics and Front Office Baseball ownership" />
       <PageBreadcrumb pageTitle="Batter Stats" />
+      <p className="mb-4 text-xs text-gray-500">{CURRENT_LEAGUE_SEASON} eligibility uses {CURRENT_LEAGUE_SEASON} or {CURRENT_LEAGUE_SEASON - 1} regular-season appearances: 5 games at a field position, 10 at DH, 5 starts for SP, or 5 relief appearances for RP. Each season qualifies separately.</p>
+      {eligibility.error && <p role="alert" className="mb-4 text-sm text-error-600">{eligibility.error}</p>}
       <div className="rounded-2xl border border-gray-200 bg-white px-5 py-7 dark:border-gray-800 dark:bg-white/[0.03] xl:px-10 xl:py-12">
         <div className="mb-6">
           <h3 className="mb-2 font-semibold text-gray-800 text-theme-xl dark:text-white/90 sm:text-2xl">
@@ -264,6 +284,8 @@ export default function BatterStats() {
           <p className="text-sm text-gray-500 dark:text-gray-400 sm:text-base">
             Live MLB hitting data from the official stats API.
           </p>
+          {offseason && <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-[10px] text-gray-400"><MedianIndicator score={1} median={0} position="positional" season={SEASON_YEAR} /><span>Above median</span><MedianIndicator score={0} median={1} position="positional" season={SEASON_YEAR} /><span>Below median · {SEASON_YEAR} fantasy points vs the primary POS league median. Hover for details.</span></p>}
+          <p className="mt-2 text-[10px] text-gray-400">PPG = Points Per Game. Brackets show the projected fantasy-point total over 162 games.</p>
           <p className="mt-2 text-xs text-gray-400"><span className="mr-1 text-amber-500">▲</span>Prospect score meets the active-roster promotion benchmark for that position. <span className="ml-2 font-bold text-red-500">Less than 30 days</span> and <span className="font-bold text-amber-600">less than 90 days</span> flag rights nearing age 27.</p>
         </div>
 
@@ -272,10 +294,11 @@ export default function BatterStats() {
 
         {!loading && !error && <div className="mb-5 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900/60 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-xs font-semibold uppercase text-gray-500">Fantasy Team<select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All teams</option>{fantasyTeams.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-          <label className="text-xs font-semibold uppercase text-gray-500">Position<select value={positionFilter} onChange={(event) => setPositionFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All positions</option>{positions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
+          <label className="text-xs font-semibold uppercase text-gray-500">Eligible Position<select value={positionFilter} onChange={(event) => setPositionFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All positions</option>{positions.map((item) => <option key={item} value={item}>{item}</option>)}</select></label>
           <label className="text-xs font-semibold uppercase text-gray-500">Ownership<select value={ownershipFilter} onChange={(event) => setOwnershipFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All players</option><option value="owned">Owned</option><option value="prospect">Prospects only</option><option value="unowned">Unowned</option></select></label>
           <label className="text-xs font-semibold uppercase text-gray-500">Age-Out Window<select value={ageOutFilter} onChange={(event) => setAgeOutFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All players</option><option value="30">Less than 30 days</option><option value="90">Less than 90 days</option></select></label>
           <fieldset><legend className="text-xs font-semibold uppercase text-gray-500">Age Range</legend><div className="mt-1.5 grid grid-cols-2 gap-2"><input type="number" min={ageBounds.youngest || undefined} max={maximumAge || ageBounds.oldest || undefined} value={minimumAge} onChange={(event) => setMinimumAge(event.target.value)} placeholder={ageBounds.youngest ? `Min ${ageBounds.youngest}` : "Min"} aria-label="Minimum batter age" className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white" /><input type="number" min={minimumAge || ageBounds.youngest || undefined} max={ageBounds.oldest || undefined} value={maximumAge} onChange={(event) => setMaximumAge(event.target.value)} placeholder={ageBounds.oldest ? `Max ${ageBounds.oldest}` : "Max"} aria-label="Maximum batter age" className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white" /></div></fieldset>
+          <div className="flex items-center sm:col-span-2 lg:col-span-5"><button type="button" aria-pressed={showEligibility} onClick={() => setShowEligibility((shown) => !shown)} className={`h-10 rounded-lg border px-3 text-xs font-bold transition ${showEligibility ? "border-brand-500 bg-brand-500 text-white" : "border-gray-300 bg-white text-gray-600 hover:border-brand-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"}`}>{showEligibility ? "Hide eligibility" : "Show eligibility"}</button></div>
         </div>}
 
         {!loading && !error && (
@@ -284,9 +307,10 @@ export default function BatterStats() {
               <thead className="bg-gray-50 dark:bg-white/[0.03]">
                 <tr>
                   <SortHeader label="PLAYER" sortKey="player" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="POSITION" sortKey="position" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+                  <th className="px-3 py-3 text-center font-semibold text-gray-700 dark:text-gray-200" title="Main position">POS</th>
+                  {showEligibility && <SortHeader label="ELIGIBILITY" sortKey="position" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />}
                   <SortHeader label="AGE" sortKey="age" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  {([['G','gamesPlayed'],['AB','atBats'],['R','runs'],['H','hits'],['2B','doubles'],['3B','triples'],['HR','homeRuns'],['RBI','rbi'],['BB','baseOnBalls'],['SO','strikeOuts'],['SB','stolenBases'],['CS','caughtStealing'],['SCORE','score'],['PPG','ppg']] as [string, BatterSortKey][]).map(([label, key]) => <SortHeader key={key} label={label} sortKey={key} activeKey={sortKey} direction={sortDirection} onSort={handleSort} />)}
+                  {([['G','gamesPlayed'],['AB','atBats'],['R','runs'],['H','hits'],['2B','doubles'],['3B','triples'],['HR','homeRuns'],['RBI','rbi'],['BB','baseOnBalls'],['SO','strikeOuts'],['SB','stolenBases'],['CS','caughtStealing'],['SCORE','score'],['PPG (162 G)','ppg']] as [string, BatterSortKey][]).map(([label, key]) => <SortHeader key={key} label={label} sortKey={key} activeKey={sortKey} direction={sortDirection} onSort={handleSort} />)}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -301,10 +325,12 @@ export default function BatterStats() {
                             : undefined
                         }
                         prospectOwner={findMlbProspectOwner(record, prospectOwners)}
+                        median={offseason ? positionalMedians.get(batterPosition(record)) : undefined}
                         promotionLabel={(() => { const season = record.playerId ? fantasySeasons.get(String(record.playerId)) : undefined; const prospect = findMlbProspectOwner(record, prospectOwners); const activeRoster = Boolean(season?.fantasy_team_id && !["AP", "PROSPECT"].includes((season.position || "").toUpperCase())); const benchmark = promotionBenchmarks.get(batterPosition(record)); return prospect && !activeRoster && benchmark !== undefined && getBatterScore(record) >= benchmark ? `Promotion review: ${getBatterScore(record)} points meets the ${batterPosition(record) === "OF" ? "OF3" : batterPosition(record)} benchmark of ${benchmark.toFixed(1)}.` : undefined; })()}
                       />
                     </td>
-                    <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">{batterPosition(record)}</td>
+                    <td className="px-3 py-3 text-center"><PositionBadge position={batterPosition(record)} /></td>
+                    {showEligibility && <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300"><MlbEligibilityBadges positions={eligibility.positions.get(record.playerId || 0)?.filter((position) => position !== "SP" && position !== "RP")} loading={eligibility.loading} error={eligibility.error} /></td>}
                     <td className="px-3 py-3 text-center tabular-nums text-gray-600 dark:text-gray-300">{formatStatValue(record.stats.age)}</td>
                     <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">{formatStatValue(record.stats.gamesPlayed)}</td>
                     <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">{formatStatValue(record.stats.atBats)}</td>
@@ -320,11 +346,11 @@ export default function BatterStats() {
                     <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">{formatStatValue(record.stats.caughtStealing)}</td>
                     <td className="px-3 py-3 text-center font-semibold text-gray-800 dark:text-white/90">{getBatterScore(record)}</td>
                     <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">
-                      {getBatterPpg(record) === null ? "—" : getBatterPpg(record)!.toFixed(2)}
+                      <BatterPointsPerGame record={record} />
                     </td>
                   </tr>
                 ))}
-                {filteredRecords.length === 0 && <tr><td colSpan={17} className="px-3 py-10 text-center text-sm text-gray-500">No batters match these filters.</td></tr>}
+                {filteredRecords.length === 0 && <tr><td colSpan={showEligibility ? 18 : 17} className="px-3 py-10 text-center text-sm text-gray-500">No batters match these filters.</td></tr>}
               </tbody>
             </table>
           </div>

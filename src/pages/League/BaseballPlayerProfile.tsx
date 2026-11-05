@@ -1,3 +1,6 @@
+import { useMlbEligibility } from "../../hooks/useMlbEligibility";
+import MlbEligibilityBadges from "../../components/hockey/MlbEligibilityBadges";
+import { CURRENT_LEAGUE_SEASON } from "../../lib/leagueSeasons";
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
@@ -57,6 +60,7 @@ function AcquisitionLine({ profile, signing }: { profile: MlbPlayerProfile; sign
 
 export default function BaseballPlayerProfile() {
   const location = useLocation();
+  const eligibility = useMlbEligibility(CURRENT_LEAGUE_SEASON);
   const params = new URLSearchParams(location.search);
   const playerId = Number(params.get("playerId"));
   const source = params.get("type") === "pitching" ? "pitching" : "hitting";
@@ -82,6 +86,7 @@ export default function BaseballPlayerProfile() {
     {error && <div className="rounded-xl border border-error-200 bg-error-50 p-4 text-error-700 dark:border-error-500/30 dark:bg-error-500/10 dark:text-error-400">{error}</div>}
     {!loading && !error && profile && <>
       <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900"><div className="h-2 bg-gradient-to-r from-brand-500 via-blue-500 to-cyan-400" /><div className="p-5 sm:p-7"><div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between"><div className="flex items-center gap-4 sm:gap-6"><div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-full border-4 border-white bg-gray-100 shadow-md dark:border-gray-800 dark:bg-gray-800"><img src={`https://img.mlbstatic.com/mlb-photos/image/upload/w_240,q_auto:best,f_auto/v1/people/${profile.playerId}/headshot/67/current`} alt={`${profile.playerName} headshot`} className="h-full w-full object-cover" /></div><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h1 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white sm:text-4xl">{profile.playerName}</h1><PositionBadge position={profile.position} /></div><div className="mt-2 flex items-center gap-2 text-sm font-semibold text-gray-500">{profile.teamLogoUrl && <img src={profile.teamLogoUrl} alt="" className="h-7 w-7 object-contain" />}<span>{profile.teamName}</span><span className="text-gray-300">•</span><span>{profile.primaryPosition || profile.position}</span></div></div></div><Link to={source === "pitching" ? "/pitcher-stats" : "/batter-stats"} className="self-start rounded-lg border border-gray-300 px-4 py-2 text-sm font-bold text-gray-600 transition hover:border-brand-400 hover:text-brand-500 dark:border-gray-700 dark:text-gray-300">← Back to {source === "pitching" ? "pitchers" : "batters"}</Link></div><dl className="mt-6 grid divide-y divide-gray-100 border-t border-gray-200 dark:divide-gray-800 dark:border-gray-800 sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-5"><BioItem label="Birthday" value={<>{formatDate(profile.birthDate)}{profile.currentAge != null && <span className="ml-1.5 font-normal text-gray-400">({profile.currentAge})</span>}</>} /><BioItem label="Birthplace" value={[profile.birthCity, profile.birthCountry].filter(Boolean).join(", ") || "—"} /><BioItem label="Bats / Throws" value={`${profile.batSide || "—"} / ${profile.pitchHand || "—"}`} /><BioItem label="Height / Weight" value={`${profile.height || "—"}${profile.weight ? ` / ${profile.weight} lb` : ""}`} /><BioItem label="MLB Debut" value={formatDate(profile.debutDate)} /></dl></div></section>
+      <section className="rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900"><h2 className="mb-3 text-sm font-bold text-gray-900 dark:text-white">{CURRENT_LEAGUE_SEASON} Position Eligibility</h2><MlbEligibilityBadges positions={eligibility.positions.get(playerId)} loading={eligibility.loading} error={eligibility.error} /><p className="mt-3 text-xs text-gray-500">Qualify in either {CURRENT_LEAGUE_SEASON} or {CURRENT_LEAGUE_SEASON - 1}: 5 games at a field position, 10 at DH, 5 starts for SP, or 5 relief appearances for RP. Older seasons do not count.</p></section>
       <AcquisitionLine profile={profile} signing={initialSigning} />
       {profile.hittingStats && <StatsLine title="Batting" stats={withFantasyScore(profile.hittingStats, "hitting")} fields={battingStats} />}
       {profile.pitchingStats && <StatsLine title="Pitching" stats={withFantasyScore(profile.pitchingStats, "pitching")} fields={pitchingStats} />}

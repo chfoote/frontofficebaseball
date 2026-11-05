@@ -1,7 +1,8 @@
 import { fetchFantasyTeams } from "./fantasyTeams";
 import { fetchPlayerSeasonsBySeason, type PlayerSeasonWithRelations } from "./fantasyPlayers";
-import { FIRST_LEAGUE_SEASON } from "./leagueSeasons";
+import { CURRENT_LEAGUE_SEASON, FIRST_LEAGUE_SEASON } from "./leagueSeasons";
 import { fetchMlbStats, type MlbStatRecord } from "./mlb";
+import { findAvailableStandingsOrder } from "./standingsOrder";
 
 const scoringSlots = [
   ...["C", "1B", "2B", "SS", "3B", "DH"].map((position) => ({ position, index: 0 })),
@@ -46,11 +47,13 @@ function teamPoints(
 }
 
 async function fetchSeasonOrder(season: number) {
-  const [teams, players, hitters, pitchers] = await Promise.all([
+  const [teams, players, [hitters, pitchers]] = await Promise.all([
     fetchFantasyTeams(),
     fetchPlayerSeasonsBySeason(season),
-    fetchMlbStats("hitting", season),
-    fetchMlbStats("pitching", season),
+    // MLB statistics only determine display order. Missing future-season data
+    // must not prevent the league's roster and payroll dashboard from loading.
+    Promise.all([fetchMlbStats("hitting", season), fetchMlbStats("pitching", season)])
+      .catch(() => [[], []] as [MlbStatRecord[], MlbStatRecord[]]),
   ]);
   const hitterMap = new Map(hitters.map((record) => [String(record.playerId), record]));
   const pitcherMap = new Map(pitchers.map((record) => [String(record.playerId), record]));
@@ -64,10 +67,5 @@ async function fetchSeasonOrder(season: number) {
 }
 
 export async function fetchStandingsTeamOrder(season: number) {
-  const rows = await fetchSeasonOrder(season);
-  const allZero = rows.every((row) => row.points === 0);
-  if (allZero && season > FIRST_LEAGUE_SEASON) {
-    return (await fetchSeasonOrder(season - 1)).map((row) => row.id);
-  }
-  return rows.map((row) => row.id);
+  return findAvailableStandingsOrder(season, FIRST_LEAGUE_SEASON, CURRENT_LEAGUE_SEASON, fetchSeasonOrder);
 }

@@ -1,3 +1,5 @@
+import { useMlbEligibility } from "../../hooks/useMlbEligibility";
+import MlbEligibilityBadges from "../../components/hockey/MlbEligibilityBadges";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
@@ -14,7 +16,7 @@ import {
   fetchTeamBrandingHistory,
   getManagerForSeason,
 } from "../../lib/fantasyTeams";
-import { fetchPlayerSeasons, fetchPlayerSeasonsByTeam, fetchPlayerSeasonsByTeamAndSeason, type PlayerSeasonWithRelations } from "../../lib/fantasyPlayers";
+import { fetchPlayerSeasons, fetchPlayerSeasonsByTeam, fetchPlayerSeasonsByTeamAndSeason, fetchProjectedPlayerSeasonsBySeason, type PlayerSeasonWithRelations } from "../../lib/fantasyPlayers";
 import {
   formatFantasyPoints,
 } from "../../lib/nhl";
@@ -37,6 +39,12 @@ const ROSTER_LIMIT = 27;
 const MLB_STATS_SEASON = CURRENT_LEAGUE_SEASON;
 const MLB_FALLBACK_SEASON = CURRENT_LEAGUE_SEASON - 1;
 const seasonOptions = [CURRENT_LEAGUE_SEASON + 1, ...playedAndCurrentSeasons];
+
+async function fetchTeamRoster(teamId: number, season: number) {
+  if (season <= CURRENT_LEAGUE_SEASON) return fetchPlayerSeasonsByTeamAndSeason(teamId, season);
+  const contracts = await fetchProjectedPlayerSeasonsBySeason(season);
+  return contracts.filter((row) => row.fantasy_team_id === teamId);
+}
 const activeSections = [
   { code: "C", label: "Catcher", type: "player" },
   { code: "1B", label: "First Base", type: "player" },
@@ -119,6 +127,7 @@ function LeadershipBadge({ role }: { role?: "C" | "A" }) {
 }
 
 function PlayerName({ season, nhlTeam, teamLogo, awards = [], onTradeBlock = false, interestAction, isLive = false, leadershipRole }: { season: PlayerSeasonWithRelations; nhlTeam?: string; teamLogo?: string; awards?: PlayerAward[]; onTradeBlock?: boolean; interestAction?: React.ReactNode; isLive?: boolean; leadershipRole?: "C" | "A" }) {
+  const eligibility = useMlbEligibility(season.season_year);
   const isExpiring = season.term_end_year === season.season_year;
   const nhlTeamAbbreviation = nhlTeam?.split(",")[0]?.trim();
   return <div className="flex min-w-56 items-center gap-2 text-left">
@@ -131,6 +140,7 @@ function PlayerName({ season, nhlTeam, teamLogo, awards = [], onTradeBlock = fal
         {[nhlTeam || "—", money.format(season.salary || 0), season.term_end_year || "No term"].join(" | ")}
         {isExpiring && <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">Expiring</span>}
       </p>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-semibold text-gray-400">Eligible · {season.season_year}</span><MlbEligibilityBadges positions={eligibility.positions.get(Number(season.player?.player_api_id))} loading={eligibility.loading} error={eligibility.error} /></div>
     </div>
   </div>;
 }
@@ -618,30 +628,35 @@ export default function HockeyTeamDetail() {
 
   useEffect(() => {
     if (!team) return;
-    Promise.all([fetchPlayerSeasonsByTeamAndSeason(team.id, selectedSeason), fetchBuyoutPenalties(selectedSeason, team.id).catch(() => [] as BuyoutPenalty[]), fetchRetentionAdjustments(selectedSeason, team.id).catch(() => [] as RetentionAdjustment[])])
+    let active = true;
+    Promise.all([fetchTeamRoster(team.id, selectedSeason), fetchBuyoutPenalties(selectedSeason, team.id).catch(() => [] as BuyoutPenalty[]), fetchRetentionAdjustments(selectedSeason, team.id).catch(() => [] as RetentionAdjustment[])])
       .then(([seasonRows, penaltyRows, adjustmentRows]) => {
+        if (!active) return;
         setRoster(seasonRows);
         setBuyoutPenalties(penaltyRows);
         setRetentionAdjustments(adjustmentRows);
         setError("");
       })
-      .catch((err: Error) => setError(err.message));
+      .catch((err: Error) => { if (active) setError(err.message); });
 
     fetchTradeBlockListings(selectedSeason)
-      .then((rows) => setTradeBlockIds(new Set(rows.map((row) => row.player_season_id))))
-      .catch(() => setTradeBlockIds(new Set()));
+      .then((rows) => { if (active) setTradeBlockIds(new Set(rows.map((row) => row.player_season_id))); })
+      .catch(() => { if (active) setTradeBlockIds(new Set()); });
 
     Promise.all([fetchPlayerAwards(), fetchAwards(true)])
       .then(([rows, definitions]) => {
+        if (!active) return;
         setPlayerAwards(rows);
         setAwardsByPlayer(mapAwardsByPlayer(rows));
         setAwardDefinitions(definitions);
       })
       .catch(() => {
+        if (!active) return;
         setPlayerAwards([]);
         setAwardsByPlayer(new Map());
         setAwardDefinitions([]);
       });
+    return () => { active = false; };
   }, [team, selectedSeason]);
 
   useEffect(() => {
@@ -658,24 +673,23 @@ export default function HockeyTeamDetail() {
 
   useEffect(() => {
     if (!team || viewMode !== "multi") return;
+    let active = true;
     Promise.all(multiYearSeasons.map(async (year) => {
-      const [explicitPlayers, leaders] = await Promise.all([
-        fetchPlayerSeasonsByTeamAndSeason(team.id, year),
+      const [players, leaders] = await Promise.all([
+        fetchTeamRoster(team.id, year),
         fetchTeamLeadership(team.id, year).catch(() => [] as TeamLeadership[]),
       ]);
-      const explicitPlayerIds = new Set(explicitPlayers.map((row) => row.player_id));
-      const projectedPlayers = roster
-        .filter((row) => !explicitPlayerIds.has(row.player_id) && (row.term_end_year ?? row.season_year) >= year)
-        .map((row) => ({ ...row, season_year: year }));
-      return { year, players: [...explicitPlayers, ...projectedPlayers], leaders };
+      return { year, players, leaders };
     }))
       .then((results) => {
+        if (!active) return;
         setMultiYearRosters(Object.fromEntries(results.map(({ year, players }) => [year, players])));
         setMultiYearLeadership(new Map(results.flatMap(({ leaders }) => leaders.map((entry) => [entry.player_season_id, entry.slot === "C" ? "C" as const : "A" as const] as const))));
         setError("");
       })
-      .catch((err: Error) => setError(err.message));
-  }, [team, viewMode, multiYearSeasons, roster]);
+      .catch((err: Error) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, [team, viewMode, multiYearSeasons]);
 
   useEffect(() => {
     let active = true;

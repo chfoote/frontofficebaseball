@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
 import PageMeta from "../../components/common/PageMeta";
 import { applyTeamBranding, fetchFantasyTeams, fetchTeamBrandingHistory, type FantasyTeam } from "../../lib/fantasyTeams";
-import { fetchPlayerSeasonsBySeason, type PlayerSeasonWithRelations } from "../../lib/fantasyPlayers";
+import { fetchPlayerSeasonsBySeason, fetchProjectedPlayerSeasonsBySeason, type PlayerSeasonWithRelations } from "../../lib/fantasyPlayers";
 import { CURRENT_LEAGUE_SEASON, dashboardSeasons } from "../../lib/leagueSeasons";
 import { fetchStandingsTeamOrder } from "../../lib/leagueStandings";
 
@@ -44,7 +44,10 @@ export default function LeagueDashboard() {
     let active = true;
     setLoading(true);
     setError("");
-    Promise.all([fetchFantasyTeams(), fetchTeamBrandingHistory(), fetchPlayerSeasonsBySeason(season), fetchStandingsTeamOrder(season)])
+    const contracts = season > CURRENT_LEAGUE_SEASON
+      ? fetchProjectedPlayerSeasonsBySeason(season)
+      : fetchPlayerSeasonsBySeason(season);
+    Promise.all([fetchFantasyTeams(), fetchTeamBrandingHistory(), contracts, fetchStandingsTeamOrder(season).catch(() => [])])
       .then(([teamRows, branding, seasonRows, standingsOrder]) => {
         if (!active) return;
         const order = new Map(standingsOrder.map((teamId, index) => [teamId, index]));
@@ -82,6 +85,7 @@ export default function LeagueDashboard() {
           </select>
         </label>
       </div>
+      {season > CURRENT_LEAGUE_SEASON && <p className="mb-4 text-xs text-gray-500">Includes existing signed contracts through {season}. Expired contracts and unsigned RFA rights do not count toward payroll.</p>}
       {loading && <p className="py-12 text-center text-sm text-gray-500">Loading dashboard…</p>}
       {error && <p className="rounded-lg border border-error-200 bg-error-50 p-4 text-sm text-error-700">{error}</p>}
       {!loading && !error && <div className="overflow-x-auto">
@@ -91,7 +95,7 @@ export default function LeagueDashboard() {
             {requirements.map(([code, minimum]) => <th key={code} className="px-3 py-3 text-center">{code} / {minimum}</th>)}
           </tr></thead>
           <tbody className="divide-y divide-gray-100 dark:divide-gray-800">{rows.map((row) => <tr key={row.team.id} className="hover:bg-gray-50 dark:hover:bg-white/[0.03]">
-            <td className="px-3 py-3"><Link to={`/teams/${row.team.abbreviation}`} className="flex min-w-56 items-center gap-3 font-semibold text-gray-900 hover:text-brand-500 dark:text-white">
+            <td className="px-3 py-3"><Link to={`/teams/${row.team.abbreviation}?season=${season}`} className="flex min-w-56 items-center gap-3 font-semibold text-gray-900 hover:text-brand-500 dark:text-white">
               <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 text-xs font-black dark:border-gray-700 dark:bg-gray-900">{row.team.logo ? <img src={row.team.logo} alt="" className="h-full w-full object-contain" /> : row.team.abbreviation}</span>
               <span>{row.team.team_name}</span>
             </Link></td>

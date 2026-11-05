@@ -1,3 +1,8 @@
+import MedianIndicator from "../../components/hockey/MedianIndicator";
+import { useMlbOffseason } from "../../hooks/useMlbOffseason";
+import PositionBadge from "../../components/hockey/PositionBadge";
+import { useMlbEligibility } from "../../hooks/useMlbEligibility";
+import MlbEligibilityBadges from "../../components/hockey/MlbEligibilityBadges";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import PageBreadcrumb from "../../components/common/PageBreadCrumb";
@@ -48,7 +53,18 @@ function formatSalary(salary: number | null | undefined) {
 function pitcherPosition(record: MlbStatRecord, season?: PlayerSeasonWithRelations) {
   const rosterPosition = (season?.position || "").toUpperCase();
   if (rosterPosition === "SP" || rosterPosition === "RP") return rosterPosition;
+  const primaryPosition = (record.position || "").toUpperCase();
+  if (primaryPosition === "SP" || primaryPosition === "RP") return primaryPosition;
   return Number(record.stats.gamesStarted ?? 0) > 0 ? "SP" : "RP";
+}
+
+function PitcherPointsPerGame({ record }: { record: MlbStatRecord }) {
+  const ppg = getPitcherPpg(record);
+  if (ppg === null) return <>—</>;
+  const starts = Number(record.stats.gamesStarted ?? 0);
+  const starter = pitcherPosition(record) === "SP" && starts > 0;
+  const pace = starter ? ppg * 32 : null;
+  return <span className="whitespace-nowrap tabular-nums" title={starter ? "Points per game (32-start fantasy-point pace: PPG × 32)" : "Points per game; relief pitchers have no 32-start projection"}>{ppg.toFixed(2)}{pace !== null && <> <span className="text-[11px] text-gray-400">({pace.toFixed(1)})</span></>}</span>;
 }
 
 function median(values: number[]) {
@@ -78,11 +94,13 @@ function PlayerCell({
   fantasySeason,
   prospectOwner,
   promotionLabel,
+  median,
 }: {
   record: MlbStatRecord;
   fantasySeason?: PlayerSeasonWithRelations;
   prospectOwner?: MlbProspectOwner;
   promotionLabel?: string;
+  median?: number;
 }) {
   const fantasyTeam = fantasySeason?.fantasy_team || prospectOwner?.team;
   const isProspect = ["AP", "PROSPECT"].includes((fantasySeason?.position || "").toUpperCase()) || Boolean(!fantasySeason?.fantasy_team_id && prospectOwner);
@@ -116,7 +134,7 @@ function PlayerCell({
         )}
       </div>
       <div className="text-left">
-        <div className="flex flex-wrap items-center gap-1.5">{name}{promotionLabel && <span title={promotionLabel} aria-label={promotionLabel} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[10px] font-black text-amber-600 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">▲</span>}{ageOutDays !== null && ageOutDays <= 90 && <span title={`Prospect rights expire in ${ageOutDays} day${ageOutDays === 1 ? "" : "s"} when the player turns 27.`} className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ring-1 ${ageOutDays <= 30 ? "bg-red-50 text-red-600 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30" : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30"}`}>Less than {ageOutDays <= 30 ? "30" : "90"} days</span>}</div>
+        <div className="flex flex-wrap items-center gap-1.5">{name}{Number(record.stats.gamesPlayed || 0) > 0 && <MedianIndicator score={getPitcherScore(record)} median={median} position={pitcherPosition(record)} season={SEASON_YEAR} />}{promotionLabel && <span title={promotionLabel} aria-label={promotionLabel} className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-50 text-[10px] font-black text-amber-600 ring-1 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30">▲</span>}{ageOutDays !== null && ageOutDays <= 90 && <span title={`Prospect rights expire in ${ageOutDays} day${ageOutDays === 1 ? "" : "s"} when the player turns 27.`} className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wide ring-1 ${ageOutDays <= 30 ? "bg-red-50 text-red-600 ring-red-200 dark:bg-red-500/10 dark:text-red-300 dark:ring-red-500/30" : "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:ring-amber-500/30"}`}>Less than {ageOutDays <= 30 ? "30" : "90"} days</span>}</div>
         <p className="mt-0.5 text-[11px] font-medium text-gray-500 dark:text-gray-400">
           {isProspect && fantasyTeam ? `${fantasyTeam.abbreviation} Prospect` : [record.teamAbbreviation, formatSalary(fantasySeason?.salary), fantasySeason?.term_end_year]
             .filter(Boolean)
@@ -138,6 +156,9 @@ export default function PitcherStats() {
   const [error, setError] = useState<string | null>(null);
   const [teamFilter, setTeamFilter] = useState("all");
   const [positionFilter, setPositionFilter] = useState("all");
+  const [showEligibility, setShowEligibility] = useState(false);
+  const eligibility = useMlbEligibility(CURRENT_LEAGUE_SEASON);
+  const offseason = useMlbOffseason(SEASON_YEAR);
   const [ownershipFilter, setOwnershipFilter] = useState("all");
   const [ageOutFilter, setAgeOutFilter] = useState("all");
   const [minimumAge, setMinimumAge] = useState("");
@@ -196,7 +217,7 @@ export default function PitcherStats() {
     return [...teams].sort((a, b) => a[1].localeCompare(b[1]));
   }, [fantasySeasons, prospectOwners]);
   const ageBounds = useMemo(() => { const ages = records.map((record) => Number(record.stats.age)).filter((age) => Number.isFinite(age) && age > 0); return { youngest: ages.length ? Math.min(...ages) : 0, oldest: ages.length ? Math.max(...ages) : 0 }; }, [records]);
-  const promotionBenchmarks = useMemo(() => {
+  const positionalMedians = useMemo(() => {
     const reliefByTeam = new Map<number, number[]>();
     const startersByTeam = new Map<number, number[]>();
     records.forEach((record) => {
@@ -211,10 +232,12 @@ export default function PitcherStats() {
     const result = new Map<string, number>();
     const rp = median([...reliefByTeam.values()].map((values) => Math.max(...values)));
     const sp4 = median([...startersByTeam.values()].filter((values) => values.length >= 4).map((values) => [...values].sort((a, b) => b - a)[3]));
-    if (rp !== null) result.set("RP", Math.ceil(rp));
-    if (sp4 !== null) result.set("SP", Math.ceil(sp4));
+    if (rp !== null) result.set("RP", rp);
+    if (sp4 !== null) result.set("SP", sp4);
     return result;
   }, [records, benchmarkSeasons]);
+
+  const promotionBenchmarks = useMemo(() => new Map([...positionalMedians].map(([position, value]) => [position, Math.ceil(value)])), [positionalMedians]);
 
   const filteredRecords = useMemo(() => records.filter((record) => {
     const season = record.playerId ? fantasySeasons.get(String(record.playerId)) : undefined;
@@ -224,7 +247,7 @@ export default function PitcherStats() {
     const prospectOnly = Boolean(prospect && !activeRoster);
     const ageOutDays = prospectOnly ? daysUntilProspectAgeOut(prospect?.birthDate) : null;
     if (teamFilter !== "all" && String(ownerId || "") !== teamFilter) return false;
-    if (positionFilter !== "all" && pitcherPosition(record, season) !== positionFilter) return false;
+    if (positionFilter !== "all" && !eligibility.positions.get(record.playerId || 0)?.some((position) => position === positionFilter)) return false;
     const age = Number(record.stats.age);
     if (minimumAge !== "" && (!Number.isFinite(age) || age < Number(minimumAge))) return false;
     if (maximumAge !== "" && (!Number.isFinite(age) || age > Number(maximumAge))) return false;
@@ -237,11 +260,11 @@ export default function PitcherStats() {
   }).sort((a, b) => {
     const aSeason = a.playerId ? fantasySeasons.get(String(a.playerId)) : undefined;
     const bSeason = b.playerId ? fantasySeasons.get(String(b.playerId)) : undefined;
-    const aValue = pitcherSortValue(a, aSeason, sortKey);
-    const bValue = pitcherSortValue(b, bSeason, sortKey);
+    const aValue = sortKey === "position" ? (eligibility.positions.get(a.playerId || 0) || []).filter((position) => position === "SP" || position === "RP").join("/") : pitcherSortValue(a, aSeason, sortKey);
+    const bValue = sortKey === "position" ? (eligibility.positions.get(b.playerId || 0) || []).filter((position) => position === "SP" || position === "RP").join("/") : pitcherSortValue(b, bSeason, sortKey);
     const comparison = typeof aValue === "string" ? aValue.localeCompare(String(bValue)) : aValue - Number(bValue);
     return sortDirection === "asc" ? comparison : -comparison;
-  }), [records, fantasySeasons, prospectOwners, teamFilter, positionFilter, ownershipFilter, ageOutFilter, minimumAge, maximumAge, sortKey, sortDirection]);
+  }), [records, fantasySeasons, prospectOwners, teamFilter, positionFilter, ownershipFilter, ageOutFilter, minimumAge, maximumAge, sortKey, sortDirection, eligibility.positions]);
 
   function handleSort(key: PitcherSortKey) {
     if (key === sortKey) setSortDirection((current) => current === "desc" ? "asc" : "desc");
@@ -252,6 +275,8 @@ export default function PitcherStats() {
     <div>
       <PageMeta title="Pitcher Stats | Front Office Baseball League" description="MLB pitcher statistics and Front Office Baseball ownership" />
       <PageBreadcrumb pageTitle="Pitcher Stats" />
+      <p className="mb-4 text-xs text-gray-500">{CURRENT_LEAGUE_SEASON} eligibility uses {CURRENT_LEAGUE_SEASON} or {CURRENT_LEAGUE_SEASON - 1} regular-season appearances: 5 games at a field position, 10 at DH, 5 starts for SP, or 5 relief appearances for RP. Each season qualifies separately.</p>
+      {eligibility.error && <p role="alert" className="mb-4 text-sm text-error-600">{eligibility.error}</p>}
       <div className="rounded-2xl border border-gray-200 bg-white px-5 py-7 dark:border-gray-800 dark:bg-white/[0.03] xl:px-10 xl:py-12">
         <div className="mb-6">
           <h3 className="mb-2 font-semibold text-gray-800 text-theme-xl dark:text-white/90 sm:text-2xl">
@@ -260,6 +285,8 @@ export default function PitcherStats() {
           <p className="text-sm text-gray-500 dark:text-gray-400 sm:text-base">
             Live MLB pitching data from the official stats API.
           </p>
+          {offseason && <p className="mt-2 flex flex-wrap items-center gap-x-1.5 text-[10px] text-gray-400"><MedianIndicator score={1} median={0} position="positional" season={SEASON_YEAR} /><span>Above median</span><MedianIndicator score={0} median={1} position="positional" season={SEASON_YEAR} /><span>Below median · {SEASON_YEAR} fantasy points vs the primary POS league median. Hover for details.</span></p>}
+          <p className="mt-2 text-[10px] text-gray-400">PPG = Points Per Game. For primary starting pitchers only, brackets show PPG × 32. Relief pitchers have no pace projection.</p>
           <p className="mt-2 text-xs text-gray-400"><span className="mr-1 text-amber-500">▲</span>Prospect score meets the active-roster promotion benchmark for that role. <span className="ml-2 font-bold text-red-500">Less than 30 days</span> and <span className="font-bold text-amber-600">less than 90 days</span> flag rights nearing age 27.</p>
         </div>
 
@@ -268,10 +295,11 @@ export default function PitcherStats() {
 
         {!loading && !error && <div className="mb-5 grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 dark:border-gray-800 dark:bg-gray-900/60 sm:grid-cols-2 lg:grid-cols-5">
           <label className="text-xs font-semibold uppercase text-gray-500">Fantasy Team<select value={teamFilter} onChange={(event) => setTeamFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All teams</option>{fantasyTeams.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-          <label className="text-xs font-semibold uppercase text-gray-500">Position<select value={positionFilter} onChange={(event) => setPositionFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All positions</option><option value="SP">SP</option><option value="RP">RP</option></select></label>
+          <label className="text-xs font-semibold uppercase text-gray-500">Eligible Position<select value={positionFilter} onChange={(event) => setPositionFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All positions</option><option value="SP">SP</option><option value="RP">RP</option></select></label>
           <label className="text-xs font-semibold uppercase text-gray-500">Ownership<select value={ownershipFilter} onChange={(event) => setOwnershipFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All players</option><option value="owned">Owned</option><option value="prospect">Prospects only</option><option value="unowned">Unowned</option></select></label>
           <label className="text-xs font-semibold uppercase text-gray-500">Age-Out Window<select value={ageOutFilter} onChange={(event) => setAgeOutFilter(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-medium normal-case text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white"><option value="all">All players</option><option value="30">Less than 30 days</option><option value="90">Less than 90 days</option></select></label>
           <fieldset><legend className="text-xs font-semibold uppercase text-gray-500">Age Range</legend><div className="mt-1.5 grid grid-cols-2 gap-2"><input type="number" min={ageBounds.youngest || undefined} max={maximumAge || ageBounds.oldest || undefined} value={minimumAge} onChange={(event) => setMinimumAge(event.target.value)} placeholder={ageBounds.youngest ? `Min ${ageBounds.youngest}` : "Min"} aria-label="Minimum pitcher age" className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white" /><input type="number" min={minimumAge || ageBounds.youngest || undefined} max={ageBounds.oldest || undefined} value={maximumAge} onChange={(event) => setMaximumAge(event.target.value)} placeholder={ageBounds.oldest ? `Max ${ageBounds.oldest}` : "Max"} aria-label="Maximum pitcher age" className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 dark:border-gray-700 dark:bg-gray-900 dark:text-white" /></div></fieldset>
+          <div className="flex items-center sm:col-span-2 lg:col-span-5"><button type="button" aria-pressed={showEligibility} onClick={() => setShowEligibility((shown) => !shown)} className={`h-10 rounded-lg border px-3 text-xs font-bold transition ${showEligibility ? "border-brand-500 bg-brand-500 text-white" : "border-gray-300 bg-white text-gray-600 hover:border-brand-400 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300"}`}>{showEligibility ? "Hide eligibility" : "Show eligibility"}</button></div>
         </div>}
 
         {!loading && !error && (
@@ -280,9 +308,10 @@ export default function PitcherStats() {
               <thead className="bg-gray-50 dark:bg-white/[0.03]">
                 <tr>
                   <SortHeader label="PLAYER" sortKey="player" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  <SortHeader label="POSITION" sortKey="position" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
+                  <th className="px-3 py-3 text-center font-semibold text-gray-700 dark:text-gray-200" title="Main position">POS</th>
+                  {showEligibility && <SortHeader label="ELIGIBILITY" sortKey="position" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />}
                   <SortHeader label="AGE" sortKey="age" activeKey={sortKey} direction={sortDirection} onSort={handleSort} />
-                  {([['G','gamesPlayed'],['GS','gamesStarted'],['IP','inningsPitched'],['W','wins'],['L','losses'],['SV','saves'],['BS','blownSaves'],['H','hits'],['HR ALLOWED','homeRuns'],['CG','completeGames'],['SHO','shutouts'],['K/9','strikeoutsPer9Inn'],['SCORE','score'],['PPG','ppg']] as [string, PitcherSortKey][]).map(([label, key]) => <SortHeader key={key} label={label} sortKey={key} activeKey={sortKey} direction={sortDirection} onSort={handleSort} />)}
+                  {([['G','gamesPlayed'],['GS','gamesStarted'],['IP','inningsPitched'],['W','wins'],['L','losses'],['SV','saves'],['BS','blownSaves'],['H','hits'],['HR ALLOWED','homeRuns'],['CG','completeGames'],['SHO','shutouts'],['K/9','strikeoutsPer9Inn'],['SCORE','score'],['PPG (32 GS)','ppg']] as [string, PitcherSortKey][]).map(([label, key]) => <SortHeader key={key} label={label} sortKey={key} activeKey={sortKey} direction={sortDirection} onSort={handleSort} />)}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -297,10 +326,12 @@ export default function PitcherStats() {
                             : undefined
                         }
                         prospectOwner={findMlbProspectOwner(record, prospectOwners)}
+                        median={offseason ? positionalMedians.get(pitcherPosition(record)) : undefined}
                         promotionLabel={(() => { const season = record.playerId ? fantasySeasons.get(String(record.playerId)) : undefined; const prospect = findMlbProspectOwner(record, prospectOwners); const activeRoster = Boolean(season?.fantasy_team_id && !["AP", "PROSPECT"].includes((season.position || "").toUpperCase())); const position = pitcherPosition(record, season); const benchmark = promotionBenchmarks.get(position); return prospect && !activeRoster && benchmark !== undefined && getPitcherScore(record) >= benchmark ? `Promotion review: ${getPitcherScore(record)} points meets the ${position === "SP" ? "SP4" : "RP"} benchmark of ${benchmark.toFixed(1)}.` : undefined; })()}
                       />
                     </td>
-                    <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">{pitcherPosition(record, record.playerId ? fantasySeasons.get(String(record.playerId)) : undefined)}</td>
+                    <td className="px-3 py-3 text-center"><PositionBadge position={pitcherPosition(record)} /></td>
+                    {showEligibility && <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300"><MlbEligibilityBadges positions={eligibility.positions.get(record.playerId || 0)?.filter((position) => position === "SP" || position === "RP")} loading={eligibility.loading} error={eligibility.error} /></td>}
                     <td className="px-3 py-3 text-center tabular-nums text-gray-600 dark:text-gray-300">{formatStatValue(record.stats.age)}</td>
                     <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">{formatStatValue(record.stats.gamesPlayed)}</td>
                     <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">{formatStatValue(record.stats.gamesStarted)}</td>
@@ -316,11 +347,11 @@ export default function PitcherStats() {
                     <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">{formatStatValue(record.stats.strikeoutsPer9Inn)}</td>
                     <td className="px-3 py-3 text-center font-semibold text-gray-800 dark:text-white/90">{getPitcherScore(record)}</td>
                     <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300">
-                      {getPitcherPpg(record) === null ? "—" : getPitcherPpg(record)!.toFixed(2)}
+                      <PitcherPointsPerGame record={record} />
                     </td>
                   </tr>
                 ))}
-                {filteredRecords.length === 0 && <tr><td colSpan={17} className="px-3 py-10 text-center text-sm text-gray-500">No pitchers match these filters.</td></tr>}
+                {filteredRecords.length === 0 && <tr><td colSpan={showEligibility ? 18 : 17} className="px-3 py-10 text-center text-sm text-gray-500">No pitchers match these filters.</td></tr>}
               </tbody>
             </table>
           </div>

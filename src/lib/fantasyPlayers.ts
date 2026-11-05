@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import type { FantasyTeam } from "./fantasyTeams";
+import { projectSeasonContracts } from "./projectSeasonContracts";
 
 export type FantasyPlayer = {
   id: number;
@@ -184,6 +185,25 @@ export async function fetchPlayerSeasonsBySeason(seasonYear: number) {
 
   if (error) throw error;
   return (data ?? []) as PlayerSeasonWithRelations[];
+}
+
+export async function fetchProjectedPlayerSeasonsBySeason(seasonYear: number) {
+  const rows: PlayerSeasonWithRelations[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("player_seasons")
+      .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
+      .lte("season_year", seasonYear)
+      .order("season_year", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    const page = (data ?? []) as PlayerSeasonWithRelations[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return projectSeasonContracts(rows, seasonYear);
 }
 
 export async function fetchPlayerSeasonsByPlayer(playerId: number) {
