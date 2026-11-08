@@ -1,3 +1,5 @@
+import TargetButton from "../../components/targets/TargetButton";
+import { useManagerTargets } from "../../hooks/useManagerTargets";
 import MedianIndicator from "../../components/hockey/MedianIndicator";
 import { useMlbOffseason } from "../../hooks/useMlbOffseason";
 import PositionBadge from "../../components/hockey/PositionBadge";
@@ -141,6 +143,8 @@ function PlayerCell({
 }
 
 export default function BatterStats() {
+  const targets = useManagerTargets();
+  const [targetsOnly, setTargetsOnly] = useState(false);
   const [records, setRecords] = useState<MlbStatRecord[]>([]);
   const [fantasySeasons, setFantasySeasons] = useState<
     Map<string, PlayerSeasonWithRelations>
@@ -241,6 +245,7 @@ export default function BatterStats() {
   const promotionBenchmarks = useMemo(() => new Map([...positionalMedians].filter(([position]) => position !== "DH").map(([position, value]) => [position, Math.ceil(value)])), [positionalMedians]);
 
   const filteredRecords = useMemo(() => records.filter((record) => {
+    if (targetsOnly && !targets.targets.some((target) => target.player_api_id === String(record.playerId))) return false;
     const season = record.playerId ? fantasySeasons.get(String(record.playerId)) : undefined;
     const prospect = findMlbProspectOwner(record, prospectOwners);
     const ownerId = season?.fantasy_team_id || prospect?.team.id;
@@ -263,7 +268,7 @@ export default function BatterStats() {
     const bValue = sortKey === "position" ? (eligibility.positions.get(b.playerId || 0) || []).filter((position) => position !== "SP" && position !== "RP").join("/") : batterSortValue(b, sortKey);
     const comparison = typeof aValue === "string" ? aValue.localeCompare(String(bValue)) : aValue - Number(bValue);
     return sortDirection === "asc" ? comparison : -comparison;
-  }), [records, fantasySeasons, prospectOwners, teamFilter, positionFilter, ownershipFilter, ageOutFilter, minimumAge, maximumAge, sortKey, sortDirection, eligibility.positions]);
+  }), [targetsOnly, targets.targets, records, fantasySeasons, prospectOwners, teamFilter, positionFilter, ownershipFilter, ageOutFilter, minimumAge, maximumAge, sortKey, sortDirection, eligibility.positions]);
 
   function handleSort(key: BatterSortKey) {
     if (key === sortKey) setSortDirection((current) => current === "desc" ? "asc" : "desc");
@@ -275,6 +280,8 @@ export default function BatterStats() {
       <PageMeta title="Batter Stats | Front Office Baseball League" description="MLB batter statistics and Front Office Baseball ownership" />
       <PageBreadcrumb pageTitle="Batter Stats" />
       <p className="mb-4 text-xs text-gray-500">{CURRENT_LEAGUE_SEASON} eligibility uses {CURRENT_LEAGUE_SEASON} or {CURRENT_LEAGUE_SEASON - 1} regular-season appearances: 5 games at a field position, 10 at DH, 5 starts for SP, or 5 relief appearances for RP. Each season qualifies separately.</p>
+      <div className="mb-4 flex flex-wrap items-center gap-3"><button type="button" aria-pressed={targetsOnly} onClick={() => setTargetsOnly((value) => !value)} className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-bold text-amber-600">{targetsOnly ? "★ Showing favorites" : "☆ Favorites only"}</button><Link to="/roster-lab#my-targets" className="text-sm font-bold text-brand-500 hover:underline">My Targets · Roster Lab</Link></div>
+      {targets.error && <p role="alert" className="mb-3 text-sm text-error-500">{targets.error}</p>}
       {eligibility.error && <p role="alert" className="mb-4 text-sm text-error-600">{eligibility.error}</p>}
       <div className="rounded-2xl border border-gray-200 bg-white px-5 py-7 dark:border-gray-800 dark:bg-white/[0.03] xl:px-10 xl:py-12">
         <div className="mb-6">
@@ -317,7 +324,7 @@ export default function BatterStats() {
                 {filteredRecords.map((record) => (
                   <tr key={`${record.playerName}-${record.teamName}`} className="hover:bg-gray-50 dark:hover:bg-white/[0.03]">
                     <td className="px-3 py-3">
-                      <PlayerCell
+                      <div className="flex items-center gap-2"><TargetButton list={targets} player={{ player_api_id: String(record.playerId || ""), player_name: record.playerName, position: batterPosition(record), stat_group: "hitting" }} /><PlayerCell
                         record={record}
                         fantasySeason={
                           record.playerId
@@ -327,7 +334,7 @@ export default function BatterStats() {
                         prospectOwner={findMlbProspectOwner(record, prospectOwners)}
                         median={offseason ? positionalMedians.get(batterPosition(record)) : undefined}
                         promotionLabel={(() => { const season = record.playerId ? fantasySeasons.get(String(record.playerId)) : undefined; const prospect = findMlbProspectOwner(record, prospectOwners); const activeRoster = Boolean(season?.fantasy_team_id && !["AP", "PROSPECT"].includes((season.position || "").toUpperCase())); const benchmark = promotionBenchmarks.get(batterPosition(record)); return prospect && !activeRoster && benchmark !== undefined && getBatterScore(record) >= benchmark ? `Promotion review: ${getBatterScore(record)} points meets the ${batterPosition(record) === "OF" ? "OF3" : batterPosition(record)} benchmark of ${benchmark.toFixed(1)}.` : undefined; })()}
-                      />
+                      /></div>
                     </td>
                     <td className="px-3 py-3 text-center"><PositionBadge position={batterPosition(record)} /></td>
                     {showEligibility && <td className="px-3 py-3 text-center text-gray-600 dark:text-gray-300"><MlbEligibilityBadges positions={eligibility.positions.get(record.playerId || 0)?.filter((position) => position !== "SP" && position !== "RP")} loading={eligibility.loading} error={eligibility.error} /></td>}

@@ -187,7 +187,7 @@ export default function Standings() {
   const [playerSeasons, setPlayerSeasons] = useState<PlayerSeasonWithRelations[]>([]);
   const [hitterStats, setHitterStats] = useState<Map<string, MlbStatRecord>>(new Map());
   const [pitcherStats, setPitcherStats] = useState<Map<string, MlbStatRecord>>(new Map());
-  const [statsView, setStatsView] = useState<"season" | "today" | "yesterday">("season");
+  const [statsView, setStatsView] = useState<"season" | "today" | "yesterday" | "preview">("season");
   const [dailyHitterStats, setDailyHitterStats] = useState<Map<string, MlbStatRecord>>(new Map());
   const [dailyPitcherStats, setDailyPitcherStats] = useState<Map<string, MlbStatRecord>>(new Map());
   const [dailyLoading, setDailyLoading] = useState(false);
@@ -203,6 +203,9 @@ export default function Standings() {
     window.localStorage.setItem("standings-show-headshots", String(showHeadshots));
   }, [showHeadshots]);
 
+  const isPreview = statsView === "preview";
+  const scoringSeason = isPreview ? selectedSeason - 1 : selectedSeason;
+
   useEffect(() => {
     let active = true;
 
@@ -210,8 +213,8 @@ export default function Standings() {
     setError("");
 
     const statsRequest = Promise.all([
-      fetchMlbStats("hitting", selectedSeason),
-      fetchMlbStats("pitching", selectedSeason),
+      fetchMlbStats("hitting", scoringSeason),
+      fetchMlbStats("pitching", scoringSeason),
     ]).then(([hitters, pitchers]) => ({ hitters, pitchers }));
 
     Promise.all([
@@ -244,10 +247,10 @@ export default function Standings() {
     return () => {
       active = false;
     };
-  }, [selectedSeason]);
+  }, [selectedSeason, scoringSeason]);
 
   useEffect(() => {
-    if (statsView === "season") return;
+    if (statsView === "season" || statsView === "preview") return;
     let active = true;
     const refresh = async () => {
       setDailyLoading(true);
@@ -273,8 +276,8 @@ export default function Standings() {
     return () => { active = false; if (intervalId) window.clearInterval(intervalId); };
   }, [statsView, selectedSeason]);
 
-  const displayedHitterStats = statsView === "season" ? hitterStats : dailyHitterStats;
-  const displayedPitcherStats = statsView === "season" ? pitcherStats : dailyPitcherStats;
+  const displayedHitterStats = statsView === "season" || isPreview ? hitterStats : dailyHitterStats;
+  const displayedPitcherStats = statsView === "season" || isPreview ? pitcherStats : dailyPitcherStats;
 
   const standings = useMemo<StandingsRow[]>(() => {
     const rows = teams.map((team) => {
@@ -371,8 +374,8 @@ export default function Standings() {
     if (next.has(position)) next.delete(position); else next.add(position);
     return next;
   });
-  const scoreLabel = statsView === "season" ? "Points" : statsView === "today" ? "Today" : "Yesterday";
-  const scoreCaption = statsView === "season" ? "FPTS" : "DAILY FPTS";
+  const scoreLabel = isPreview ? "Preview points" : statsView === "season" ? "Points" : statsView === "today" ? "Today" : "Yesterday";
+  const scoreCaption = isPreview ? `${scoringSeason} FPTS · PREVIEW` : statsView === "season" ? "FPTS" : "DAILY FPTS";
 
   return (
     <div>
@@ -386,13 +389,13 @@ export default function Standings() {
         <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="font-semibold text-gray-800 text-theme-xl dark:text-white/90">
-              {selectedSeason} League Standings
+              {selectedSeason} {isPreview ? "Roster Preview" : "League Standings"}
             </h3>
-            <p className="mt-1 max-w-xl text-sm text-gray-500 dark:text-gray-400">{statsView === "season" ? "Ranked by total fantasy points from each team’s scoring lineup." : `${scoreLabel}’s gain from scoring-lineup players only.`}</p>
+            <p className="mt-1 max-w-xl text-sm text-gray-500 dark:text-gray-400">{isPreview ? `${selectedSeason} rosters scored with ${scoringSeason} MLB stats, including new call-ups. Open slots and players without prior-year stats score zero. Preview only; official standings are unchanged.` : statsView === "season" ? "Ranked by total fantasy points from each team’s scoring lineup." : `${scoreLabel}’s gain from scoring-lineup players only.`}</p>
           </div>
 
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end lg:w-auto lg:justify-end">
-            <div><label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Score View {dailyLoading && <span className="ml-1 text-brand-500">Updating…</span>}</label><div className="inline-flex h-11 w-full rounded-lg border border-gray-300 bg-white p-1 dark:border-gray-700 dark:bg-gray-900 sm:w-auto">{(["season", "today", "yesterday"] as const).map((view) => <button key={view} type="button" onClick={() => { setStatsView(view); if (view !== "season") setSelectedSeason(CURRENT_LEAGUE_SEASON); }} className={`rounded-md px-3 text-xs font-bold capitalize transition ${statsView === view ? "bg-brand-500 text-white" : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"}`}>{view}</button>)}</div></div>
+            <div><label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Score View {dailyLoading && (statsView === "today" || statsView === "yesterday") && <span className="ml-1 text-brand-500">Updating…</span>}</label><div className="inline-flex h-11 w-full rounded-lg border border-gray-300 bg-white p-1 dark:border-gray-700 dark:bg-gray-900 sm:w-auto">{(["season", "today", "yesterday", "preview"] as const).map((view) => <button key={view} type="button" aria-pressed={statsView === view} onClick={() => { setStatsView(view); if (view !== "season") setSelectedSeason(CURRENT_LEAGUE_SEASON); }} className={`rounded-md px-3 text-xs font-bold capitalize transition ${statsView === view ? "bg-brand-500 text-white" : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"}`}>{view}</button>)}</div></div>
             <button
               type="button"
               aria-pressed={hidePositionDetails}
