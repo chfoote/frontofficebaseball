@@ -1,3 +1,4 @@
+import PlayerPositionEligibility from "../../components/hockey/PlayerPositionEligibility";
 import { useMlbEligibility } from "../../hooks/useMlbEligibility";
 import MlbEligibilityBadges from "../../components/hockey/MlbEligibilityBadges";
 import { useEffect, useMemo, useState } from "react";
@@ -140,7 +141,7 @@ function PlayerName({ season, nhlTeam, teamLogo, awards = [], onTradeBlock = fal
         {[nhlTeam || "—", money.format(season.salary || 0), season.term_end_year || "No term"].join(" | ")}
         {isExpiring && <span className="ml-2 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">Expiring</span>}
       </p>
-      <div className="mt-1 flex flex-wrap items-center gap-1.5"><span className="text-[9px] font-semibold text-gray-400">Eligible · {season.season_year}</span><MlbEligibilityBadges positions={eligibility.positions.get(Number(season.player?.player_api_id))} loading={eligibility.loading} error={eligibility.error} /></div>
+      <div className="mt-1 flex flex-wrap items-center gap-1.5">{["C", "1B", "2B", "SS", "3B", "OF", "DH"].includes(position(season)) ? <PlayerPositionEligibility position={position(season)} positions={eligibility.positions.get(Number(season.player?.player_api_id))} loading={eligibility.loading} error={eligibility.error} /> : <><span className="text-[9px] font-semibold text-gray-400">Eligible · {season.season_year}</span><MlbEligibilityBadges positions={eligibility.positions.get(Number(season.player?.player_api_id))} loading={eligibility.loading} error={eligibility.error} /></>}</div>
     </div>
   </div>;
 }
