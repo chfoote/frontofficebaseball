@@ -1,3 +1,4 @@
+import { POOLSTERS_LEAGUE_ID } from "./leagueIdentity";
 import { supabase } from "./supabase";
 import type { FantasyTeam } from "./fantasyTeams";
 import { projectSeasonContracts } from "./projectSeasonContracts";
@@ -24,6 +25,7 @@ export type FantasyPlayerInput = {
 };
 
 export type PlayerSeason = {
+  league_id?: string;
   id: number;
   player_id: number;
   season_year: number;
@@ -131,28 +133,28 @@ export async function deleteFantasyPlayer(id: number) {
   if (error) throw error;
 }
 
-export async function fetchPlayerSeasons() {
-  const { data, error } = await supabase
-    .from("player_seasons")
-    .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
-    .order("season_year", { ascending: false })
-    .order("full_name", {
-      ascending: true,
-      referencedTable: "players",
-      nullsFirst: false,
-    });
-
-  if (error) throw error;
-  return (data ?? []) as PlayerSeasonWithRelations[];
+export async function fetchPlayerSeasons(leagueId = POOLSTERS_LEAGUE_ID) {
+  const rows: PlayerSeasonWithRelations[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase.from("player_seasons")
+      .select("*, player:players(*), fantasy_team:fantasy_teams(*)").eq("league_id",leagueId)
+      .order("season_year",{ascending:false}).order("id").range(from,from+999);
+    if (error) throw error;
+    const page = (data || []) as PlayerSeasonWithRelations[];
+    rows.push(...page);
+    if (page.length < 1000) return rows;
+  }
 }
 
 export async function fetchPlayerSeasonsByTeamAndSeason(
   fantasyTeamId: number,
   seasonYear: number,
+  leagueId = POOLSTERS_LEAGUE_ID,
 ) {
   const { data, error } = await supabase
     .from("player_seasons")
     .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
+    .eq("league_id", leagueId)
     .eq("fantasy_team_id", fantasyTeamId)
     .eq("season_year", seasonYear)
     .order("position", { ascending: true, nullsFirst: false })
@@ -166,10 +168,11 @@ export async function fetchPlayerSeasonsByTeamAndSeason(
   return (data ?? []) as PlayerSeasonWithRelations[];
 }
 
-export async function fetchPlayerSeasonsByTeam(fantasyTeamId: number) {
+export async function fetchPlayerSeasonsByTeam(fantasyTeamId: number, leagueId = POOLSTERS_LEAGUE_ID) {
   const { data, error } = await supabase
     .from("player_seasons")
     .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
+    .eq("league_id", leagueId)
     .eq("fantasy_team_id", fantasyTeamId)
     .order("season_year", { ascending: false });
 
@@ -177,23 +180,25 @@ export async function fetchPlayerSeasonsByTeam(fantasyTeamId: number) {
   return (data ?? []) as PlayerSeasonWithRelations[];
 }
 
-export async function fetchPlayerSeasonsBySeason(seasonYear: number) {
+export async function fetchPlayerSeasonsBySeason(seasonYear: number, leagueId = POOLSTERS_LEAGUE_ID) {
   const { data, error } = await supabase
     .from("player_seasons")
     .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
+    .eq("league_id", leagueId)
     .eq("season_year", seasonYear);
 
   if (error) throw error;
   return (data ?? []) as PlayerSeasonWithRelations[];
 }
 
-export async function fetchProjectedPlayerSeasonsBySeason(seasonYear: number) {
+export async function fetchProjectedPlayerSeasonsBySeason(seasonYear: number, leagueId = POOLSTERS_LEAGUE_ID) {
   const rows: PlayerSeasonWithRelations[] = [];
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
       .from("player_seasons")
       .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
+      .eq("league_id", leagueId)
       .lte("season_year", seasonYear)
       .order("season_year", { ascending: false })
       .order("id", { ascending: true })
@@ -203,23 +208,24 @@ export async function fetchProjectedPlayerSeasonsBySeason(seasonYear: number) {
     rows.push(...page);
     if (page.length < pageSize) break;
   }
-  return projectSeasonContracts(rows, seasonYear);
+  return projectSeasonContracts(rows, seasonYear, leagueId);
 }
 
-export async function fetchPlayerSeasonsByPlayer(playerId: number) {
+export async function fetchPlayerSeasonsByPlayer(playerId: number, leagueId = POOLSTERS_LEAGUE_ID) {
   const { data, error } = await supabase
     .from("player_seasons")
     .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
+    .eq("league_id", leagueId)
     .eq("player_id", playerId)
     .order("season_year", { ascending: false });
   if (error) throw error;
   return (data ?? []) as PlayerSeasonWithRelations[];
 }
 
-export async function createPlayerSeason(season: PlayerSeasonInput) {
+export async function createPlayerSeason(season: PlayerSeasonInput, leagueId = POOLSTERS_LEAGUE_ID) {
   const { data, error } = await supabase
     .from("player_seasons")
-    .insert(season)
+    .insert({ ...season, league_id: leagueId })
     .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
     .single();
 
@@ -227,10 +233,11 @@ export async function createPlayerSeason(season: PlayerSeasonInput) {
   return data as PlayerSeasonWithRelations;
 }
 
-export async function updatePlayerSeason(id: number, season: PlayerSeasonInput) {
+export async function updatePlayerSeason(id: number, season: PlayerSeasonInput, leagueId = POOLSTERS_LEAGUE_ID) {
   const { data, error } = await supabase
     .from("player_seasons")
     .update(season)
+    .eq("league_id", leagueId)
     .eq("id", id)
     .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
     .single();
@@ -239,7 +246,7 @@ export async function updatePlayerSeason(id: number, season: PlayerSeasonInput) 
   return data as PlayerSeasonWithRelations;
 }
 
-export async function deletePlayerSeason(id: number) {
-  const { error } = await supabase.from("player_seasons").delete().eq("id", id);
+export async function deletePlayerSeason(id: number, leagueId = POOLSTERS_LEAGUE_ID) {
+  const { error } = await supabase.from("player_seasons").delete().eq("league_id", leagueId).eq("id", id);
   if (error) throw error;
 }

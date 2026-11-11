@@ -1,16 +1,21 @@
+import { useLocation } from "react-router";
+import { useLeagueRoute } from "../../context/LeagueRouteContext";
+import { isPlatformPage } from "../../lib/leagueIdentity";
+import { useLeague } from "../../context/LeagueContext";
 import { useEffect, useState } from "react";
 import { DropdownItem } from "../ui/dropdown/DropdownItem";
 import { Dropdown } from "../ui/dropdown/Dropdown";
-import { useNavigate } from "react-router";
 import { useAuth } from "../../context/AuthContext";
 import { fetchProfile } from "../../lib/profiles";
-import { CURRENT_LEAGUE_SEASON } from "../../lib/leagueSeasons";
 import { fetchLatestUserTeamAssignment, fetchUserTeamAssignment } from "../../lib/teamUserAssignments";
 
 export default function UserDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const { user, signOut } = useAuth();
-  const navigate = useNavigate();
+  const { league } = useLeague();
+  const { basename } = useLeagueRoute();
+  const location = useLocation();
+  const platformMode = isPlatformPage(basename,location.pathname);
   const [profileName, setProfileName] = useState("");
   const [teamLogo, setTeamLogo] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
@@ -28,8 +33,9 @@ export default function UserDropdown() {
       return;
     }
     fetchProfile(user.id).then((profile) => setProfileName(profile?.display_name?.trim() || "")).catch(() => setProfileName(""));
-    fetchUserTeamAssignment(user.id, CURRENT_LEAGUE_SEASON)
-      .then((assignment) => assignment || fetchLatestUserTeamAssignment(user.id))
+    if(platformMode){setTeamLogo(null);setTeamName("");return;}
+    fetchUserTeamAssignment(user.id, league.current_season, league.id)
+      .then((assignment) => assignment || fetchLatestUserTeamAssignment(user.id, league.id))
       .then((assignment) => {
         setTeamLogo(assignment?.fantasy_team?.logo || null);
         setTeamName(assignment?.fantasy_team?.team_name || "");
@@ -38,7 +44,7 @@ export default function UserDropdown() {
         setTeamLogo(null);
         setTeamName("");
       });
-  }, [user]);
+  }, [user,league.id,league.current_season,platformMode]);
 
   const avatarInitials = fullName.replace(/@.*$/, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "GL";
 
@@ -53,14 +59,14 @@ export default function UserDropdown() {
   async function handleSignOut() {
     closeDropdown();
     await signOut();
-    navigate("/signin");
+    window.location.assign("/signin");
   }
 
   if (!user) {
     return (
       <button
         type="button"
-        onClick={() => navigate("/signin")}
+        onClick={() => window.location.assign("/signin")}
         className="rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600"
       >
         Sign In
@@ -118,8 +124,8 @@ export default function UserDropdown() {
           <li>
             <DropdownItem
               onItemClick={closeDropdown}
-              tag="a"
-              to="/profile"
+              tag="button"
+              onClick={() => window.location.assign("/profile")}
               className="flex items-center gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
             >
               <svg
@@ -143,8 +149,8 @@ export default function UserDropdown() {
           <li>
             <DropdownItem
               onItemClick={closeDropdown}
-              tag="a"
-              to="/profile"
+              tag="button"
+              onClick={() => window.location.assign("/profile")}
               className="flex items-center gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
             >
               <svg
@@ -168,8 +174,8 @@ export default function UserDropdown() {
           <li>
             <DropdownItem
               onItemClick={closeDropdown}
-              tag="a"
-              to="/profile"
+              tag="button"
+              onClick={() => window.location.assign("/profile")}
               className="flex items-center gap-3 px-3 py-2 font-medium text-gray-700 rounded-lg group text-theme-sm hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-white/5 dark:hover:text-gray-300"
             >
               <svg

@@ -7,7 +7,6 @@ import Checkbox from "../form/input/Checkbox";
 import Button from "../ui/button/Button";
 import { useAuth } from "../../context/AuthContext";
 import LeagueBrand from "../common/LeagueBrand";
-import PoolstersBrand from "../common/PoolstersBrand";
 
 export default function SignInForm() {
   const [showPassword, setShowPassword] = useState(false);
@@ -44,13 +43,12 @@ export default function SignInForm() {
         </Link>
         <div className="my-6 flex w-full items-center gap-3" aria-hidden="true">
           <span className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
-          <span className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-400">League hosted by FOB</span>
+          <span className="text-[9px] font-black uppercase tracking-[0.22em] text-gray-400">Your leagues. Your front office.</span>
           <span className="h-px flex-1 bg-gray-100 dark:bg-gray-800" />
         </div>
-        <PoolstersBrand className="justify-center" />
         <div className="mt-6">
           <h1 className="text-2xl font-black tracking-tight text-gray-950 dark:text-white">Welcome back</h1>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Sign in to enter the Poolsters front office.</p>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Sign in to see your leagues and manage your teams.</p>
         </div>
       </div>
 
@@ -81,7 +79,7 @@ export default function SignInForm() {
       <p className="mt-7 text-center text-sm text-gray-500 dark:text-gray-400">
         Need an account? <Link to="/signup" className="font-bold text-emerald-600 hover:text-emerald-700 hover:underline dark:text-emerald-400">Create one</Link>
       </p>
-      <p className="mt-6 border-t border-gray-100 pt-5 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400 dark:border-gray-800">Poolsters · Hosted by Front Office Baseball</p>
+      <p className="mt-6 border-t border-gray-100 pt-5 text-center text-[10px] font-bold uppercase tracking-[0.18em] text-gray-400 dark:border-gray-800">Front Office Baseball · One account, all your leagues</p>
     </div>
   );
 }

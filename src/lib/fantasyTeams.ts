@@ -1,6 +1,8 @@
+import { POOLSTERS_LEAGUE_ID } from "./leagueIdentity";
 import { supabase } from "./supabase";
 
 export type FantasyTeam = {
+  league_id?: string;
   id: number;
   team_name: string;
   abbreviation: string;
@@ -64,10 +66,11 @@ export type FantasyTeamBranding = {
   secondary_color: string | null;
 };
 
-export async function fetchFantasyTeams(includeInactive = false) {
+export async function fetchFantasyTeams(includeInactive = false, leagueId = POOLSTERS_LEAGUE_ID) {
   let query = supabase
     .from("fantasy_teams")
     .select("*")
+    .eq("league_id", leagueId)
     .order("id", { ascending: true });
 
   if (!includeInactive) {
@@ -82,10 +85,12 @@ export async function fetchFantasyTeams(includeInactive = false) {
 export async function fetchFantasyTeamByAbbreviation(
   abbreviation: string,
   includeInactive = false,
+  leagueId = POOLSTERS_LEAGUE_ID,
 ) {
   let query = supabase
     .from("fantasy_teams")
-    .select("*");
+    .select("*")
+    .eq("league_id", leagueId);
 
   query = /^\d+$/.test(abbreviation)
     ? query.eq("id", Number(abbreviation))
@@ -133,10 +138,10 @@ export async function deleteTeamBranding(id: number) {
   if (error) throw error;
 }
 
-export async function createFantasyTeam(team: FantasyTeamInput) {
+export async function createFantasyTeam(team: FantasyTeamInput, leagueId = POOLSTERS_LEAGUE_ID) {
   const { data, error } = await supabase
     .from("fantasy_teams")
-    .insert(team)
+    .insert({ ...team, league_id: leagueId })
     .select()
     .single();
 
@@ -144,10 +149,11 @@ export async function createFantasyTeam(team: FantasyTeamInput) {
   return data as FantasyTeam;
 }
 
-export async function updateFantasyTeam(id: number, team: FantasyTeamInput) {
+export async function updateFantasyTeam(id: number, team: FantasyTeamInput, leagueId = POOLSTERS_LEAGUE_ID) {
   const { data, error } = await supabase
     .from("fantasy_teams")
     .update(team)
+    .eq("league_id", leagueId)
     .eq("id", id)
     .select()
     .single();
@@ -156,10 +162,11 @@ export async function updateFantasyTeam(id: number, team: FantasyTeamInput) {
   return data as FantasyTeam;
 }
 
-export async function deactivateFantasyTeam(id: number) {
+export async function deactivateFantasyTeam(id: number, leagueId = POOLSTERS_LEAGUE_ID) {
   const { error } = await supabase
     .from("fantasy_teams")
     .update({ active: false })
+    .eq("league_id", leagueId)
     .eq("id", id);
 
   if (error) throw error;

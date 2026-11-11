@@ -1,3 +1,4 @@
+import { useLeague } from "../context/LeagueContext";
 import { validTargetEstimate } from "../lib/managerTargets";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
@@ -15,9 +16,12 @@ export type TargetPlayer = Omit<ManagerTarget, "estimated_salary" | "term">;
 
 export function useManagerTargets() {
   const { user } = useAuth();
+  const { league } = useLeague();
+  const leagueId = league.id;
   const userId = user?.id;
-  const currentUser = useRef(userId);
-  currentUser.current = userId;
+  const scope = `${leagueId}:${userId || "guest"}`;
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
   const [targets, setTargets] = useState<ManagerTarget[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -28,14 +32,14 @@ export function useManagerTargets() {
     setError("");
     setLoading(true);
     if (!userId) { setLoading(false); return; }
-    void supabase.from("manager_targets").select("*").eq("user_id", userId).order("created_at").then(({ data, error }) => {
+    void supabase.from("manager_targets").select("*").eq("league_id", leagueId).eq("user_id", userId).order("created_at").then(({ data, error }) => {
       if (!active) return;
       if (error) setError("Unable to load your targets. Please try again later.");
       else setTargets(data || []);
       setLoading(false);
     });
     return () => { active = false; };
-  }, [userId]);
+  }, [userId, leagueId]);
 
   const save = useCallback(async (target: ManagerTarget) => {
     if (!userId || busy || loading) return;
@@ -44,22 +48,22 @@ export function useManagerTargets() {
     }
     setBusy(true); setError("");
     try {
-      const { error } = await supabase.from("manager_targets").upsert({ ...target, user_id: userId }, { onConflict: "user_id,player_api_id" });
+      const { error } = await supabase.from("manager_targets").upsert({ ...target, user_id: userId, league_id: leagueId }, { onConflict: "league_id,user_id,player_api_id" });
       if (error) throw error;
-      if (currentUser.current === userId) setTargets((rows) => [...rows.filter((row) => row.player_api_id !== target.player_api_id), target]);
-    } catch { if (currentUser.current === userId) setError("Could not save this target. Your changes have not been saved; please try again."); }
+      if (currentScope.current === scope) setTargets((rows) => [...rows.filter((row) => row.player_api_id !== target.player_api_id), target]);
+    } catch { if (currentScope.current === scope) setError("Could not save this target. Your changes have not been saved; please try again."); }
     finally { setBusy(false); }
-  }, [userId, busy, loading]);
+  }, [userId, leagueId, scope, busy, loading]);
 
   const remove = useCallback(async (playerId: string) => {
     if (!userId || busy || loading) return;
     setBusy(true); setError("");
     try {
-      const { error } = await supabase.from("manager_targets").delete().eq("user_id", userId).eq("player_api_id", playerId);
+      const { error } = await supabase.from("manager_targets").delete().eq("league_id", leagueId).eq("user_id", userId).eq("player_api_id", playerId);
       if (error) throw error;
-      if (currentUser.current === userId) setTargets((rows) => rows.filter((row) => row.player_api_id !== playerId));
-    } catch { if (currentUser.current === userId) setError("Could not remove this target. Please try again."); }
+      if (currentScope.current === scope) setTargets((rows) => rows.filter((row) => row.player_api_id !== playerId));
+    } catch { if (currentScope.current === scope) setError("Could not remove this target. Please try again."); }
     finally { setBusy(false); }
-  }, [userId, busy, loading]);
+  }, [userId, leagueId, scope, busy, loading]);
   return { targets, loading, busy, error, save, remove, signedIn: Boolean(userId) };
 }

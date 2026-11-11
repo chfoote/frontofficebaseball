@@ -1,3 +1,4 @@
+import { POOLSTERS_LEAGUE_ID } from "./leagueIdentity";
 import { supabase } from "./supabase";
 import { applyTeamBranding, fetchAllTeamManagerTenures, fetchFantasyTeams, fetchTeamBrandingHistory, type FantasyTeam } from "./fantasyTeams";
 import type { Profile } from "./profiles";
@@ -22,10 +23,12 @@ export type TeamUserAssignmentWithTeam = TeamUserAssignment & {
 export async function fetchUserTeamAssignment(
   userId: string,
   seasonYear: number,
+  leagueId = POOLSTERS_LEAGUE_ID,
 ) {
   const { data, error } = await supabase
     .from("team_user_assignments")
     .select("*, fantasy_team:fantasy_teams(*), profile:profiles(*)")
+    .eq("league_id", leagueId)
     .eq("user_id", userId)
     .eq("season_year", seasonYear)
     .maybeSingle();
@@ -34,10 +37,11 @@ export async function fetchUserTeamAssignment(
   return data as TeamUserAssignmentWithTeam | null;
 }
 
-export async function fetchLatestUserTeamAssignment(userId: string) {
+export async function fetchLatestUserTeamAssignment(userId: string, leagueId = POOLSTERS_LEAGUE_ID) {
   const { data, error } = await supabase
     .from("team_user_assignments")
     .select("*, fantasy_team:fantasy_teams(*), profile:profiles(*)")
+    .eq("league_id", leagueId)
     .eq("user_id", userId)
     .order("season_year", { ascending: false })
     .limit(1)
@@ -47,10 +51,11 @@ export async function fetchLatestUserTeamAssignment(userId: string) {
   return data as TeamUserAssignmentWithTeam | null;
 }
 
-export async function fetchTeamUserAssignments(seasonYear: number) {
+export async function fetchTeamUserAssignments(seasonYear: number, leagueId = POOLSTERS_LEAGUE_ID) {
   const { data, error } = await supabase
     .from("team_user_assignments")
     .select("*, fantasy_team:fantasy_teams(*), profile:profiles(*)")
+    .eq("league_id", leagueId)
     .eq("season_year", seasonYear)
     .order("user_email", { ascending: true, nullsFirst: false });
 
@@ -58,15 +63,16 @@ export async function fetchTeamUserAssignments(seasonYear: number) {
   return (data ?? []) as TeamUserAssignmentWithTeam[];
 }
 
-export async function fetchAllTeamUserAssignments() {
+export async function fetchAllTeamUserAssignments(leagueId = POOLSTERS_LEAGUE_ID) {
   const [{ data, error }, branding, tenures, teams] = await Promise.all([
     supabase
       .from("team_user_assignments")
       .select("*, fantasy_team:fantasy_teams(*), profile:profiles(*)")
+      .eq("league_id", leagueId)
       .order("season_year", { ascending: false }),
     fetchTeamBrandingHistory(),
     fetchAllTeamManagerTenures(),
-    fetchFantasyTeams(true),
+    fetchFantasyTeams(true, leagueId),
   ]);
 
   if (error) throw error;
@@ -129,23 +135,26 @@ export async function upsertUserTeamAssignment({
   userEmail,
   fantasyTeamId,
   seasonYear,
+  leagueId = POOLSTERS_LEAGUE_ID,
 }: {
   userId: string;
   userEmail: string;
   fantasyTeamId: number;
   seasonYear: number;
+  leagueId?: string;
 }) {
   const { data, error } = await supabase
     .from("team_user_assignments")
     .upsert(
       {
+        league_id: leagueId,
         user_id: userId,
         user_email: userEmail,
         fantasy_team_id: fantasyTeamId,
         season_year: seasonYear,
         role: "owner",
       },
-      { onConflict: "user_id,season_year" },
+      { onConflict: "league_id,user_id,season_year" },
     )
     .select("*, fantasy_team:fantasy_teams(*), profile:profiles(*)")
     .single();
@@ -159,23 +168,26 @@ export async function upsertTeamUserAssignment({
   userEmail,
   fantasyTeamId,
   seasonYear,
+  leagueId = POOLSTERS_LEAGUE_ID,
 }: {
   userId: string;
   userEmail: string | null;
   fantasyTeamId: number;
   seasonYear: number;
+  leagueId?: string;
 }) {
   const { data, error } = await supabase
     .from("team_user_assignments")
     .upsert(
       {
+        league_id: leagueId,
         user_id: userId,
         user_email: userEmail,
         fantasy_team_id: fantasyTeamId,
         season_year: seasonYear,
         role: "owner",
       },
-      { onConflict: "user_id,season_year" },
+      { onConflict: "league_id,user_id,season_year" },
     )
     .select("*, fantasy_team:fantasy_teams(*), profile:profiles(*)")
     .single();
@@ -184,10 +196,11 @@ export async function upsertTeamUserAssignment({
   return data as TeamUserAssignmentWithTeam;
 }
 
-export async function deleteTeamUserAssignment(id: number) {
+export async function deleteTeamUserAssignment(id: number, leagueId = POOLSTERS_LEAGUE_ID) {
   const { error } = await supabase
     .from("team_user_assignments")
     .delete()
+    .eq("league_id", leagueId)
     .eq("id", id);
 
   if (error) throw error;

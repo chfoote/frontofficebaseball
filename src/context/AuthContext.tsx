@@ -13,6 +13,8 @@ type AuthContextType = {
   user: User | null;
   loading: boolean;
   isAdmin: boolean;
+  isPlatformAdmin: boolean;
+  adminSetupPending: boolean;
   signUp: (
     email: string,
     password: string,
@@ -31,11 +33,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isPlatformAdmin, setIsPlatformAdmin] = useState(false);
+  const [adminSetupPending, setAdminSetupPending] = useState(false);
 
   useEffect(() => {
     let active = true;
+    let sessionVersion = 0;
 
     async function loadSession(nextSession: Session | null) {
+      const version = ++sessionVersion;
       if (active) {
         setSession(nextSession);
       }
@@ -43,21 +49,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!nextSession?.user) {
         if (active) {
           setIsAdmin(false);
+          setIsPlatformAdmin(false);
+          setAdminSetupPending(false);
           setLoading(false);
         }
         return;
       }
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("is_admin")
-        .eq("id", nextSession.user.id)
-        .maybeSingle();
-
-      if (active) {
-        // The database is the single source of truth for administrator access.
-        // This keeps the UI and Supabase RLS policies in agreement.
-        setIsAdmin(!error && Boolean(data?.is_admin));
+      const [legacy, authority, platform] = await Promise.all([
+        supabase.from("profiles").select("is_admin").eq("id", nextSession.user.id).maybeSingle(),
+        supabase.rpc("is_admin"),
+        supabase.rpc("is_platform_admin"),
+      ]);
+      if (active && version === sessionVersion) {
+        setIsAdmin(authority.error ? !legacy.error && Boolean(legacy.data?.is_admin) : Boolean(authority.data));
+        setIsPlatformAdmin(!platform.error && Boolean(platform.data));
+        setAdminSetupPending(Boolean(platform.error && platform.error.code === "PGRST202"));
         setLoading(false);
       }
     }
@@ -116,6 +123,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     loading,
     isAdmin,
+    isPlatformAdmin,
+    adminSetupPending,
     signUp,
     signIn,
     signOut,

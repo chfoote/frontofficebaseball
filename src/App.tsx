@@ -1,3 +1,10 @@
+import { useState } from "react";
+import { LeagueRouteContext } from "./context/LeagueRouteContext";
+import { leagueRouteScope } from "./lib/leagueIdentity";
+import LeagueCoreWorkspace from "./pages/League/LeagueCoreWorkspace";
+import PlatformAdmin from "./pages/League/PlatformAdmin";
+import UserAdmin from "./pages/League/UserAdmin";
+import LeagueUserAdminRoute from "./components/auth/LeagueUserAdminRoute";
 import { BrowserRouter as Router, Routes, Route } from "react-router";
 import SignIn from "./pages/AuthPages/SignIn";
 import SignUp from "./pages/AuthPages/SignUp";
@@ -58,12 +65,15 @@ import UpcomingRfas from "./pages/League/UpcomingRfas";
 import UpcomingUfas from "./pages/League/UpcomingUfas";
 
 export default function App() {
+  const [scope] = useState(() => leagueRouteScope(window.location.pathname));
   return (
     <>
-      <Router>
+      <Router basename={scope.basename}>
+        <LeagueRouteContext.Provider value={scope}>
         <ScrollToTop />
         <Routes>
           <Route element={<AppLayout />}>
+            <Route path="/contracts" element={<LeagueCoreWorkspace />} />
             <Route path="/teams" element={<Teams />} />
             <Route path="/teams/:abbreviation/farm-systems" element={<FarmSystems />} />
             <Route path="/teams/:abbreviation/records" element={<RecordBook />} />
@@ -102,6 +112,13 @@ export default function App() {
               <Route path="/gm-trade-network" element={<GmTradeNetwork />} />
               <Route path="/gms/:managerId" element={<GmProfile />} />
               <Route path="/admin/trade-manager" element={<TradeManager />} />
+
+              <Route element={<LeagueUserAdminRoute />}>
+                <Route path="/admin/users" element={<UserAdmin />} />
+              </Route>
+              <Route element={<LeagueUserAdminRoute platformOnly />}>
+                <Route path="/admin/leagues" element={<PlatformAdmin />} />
+              </Route>
 
               <Route element={<AdminRoute />}>
                 <Route path="/admin/auction-house" element={<AuctionHouse />} />
@@ -143,6 +160,7 @@ export default function App() {
           {/* Fallback Route */}
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </LeagueRouteContext.Provider>
       </Router>
     </>
   );

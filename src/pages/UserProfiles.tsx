@@ -1,3 +1,7 @@
+import { useLocation } from "react-router";
+import { useLeagueRoute } from "../context/LeagueRouteContext";
+import { isPlatformPage } from "../lib/leagueIdentity";
+import { useLeague } from "../context/LeagueContext";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import PageBreadcrumb from "../components/common/PageBreadCrumb";
@@ -21,7 +25,11 @@ const medalStyles = {
 const medalIcons = { 1: "🥇", 2: "🥈", 3: "🥉" };
 
 export default function UserProfiles() {
-  const { user } = useAuth();
+  const { user, isPlatformAdmin } = useAuth();
+  const { membership } = useLeague();
+  const { basename } = useLeagueRoute();
+  const location=useLocation();
+  const platformMode=isPlatformPage(basename,location.pathname);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [assignment, setAssignment] = useState<TeamUserAssignmentWithTeam | null>(null);
   const [finishes, setFinishes] = useState<FantasyTeamFinish[]>([]);
@@ -36,7 +44,7 @@ export default function UserProfiles() {
     let active = true;
     Promise.all([
       fetchProfile(user.id),
-      fetchUserTeamAssignment(user.id, CURRENT_LEAGUE_SEASON).then((row) => row || fetchLatestUserTeamAssignment(user.id)),
+      platformMode ? Promise.resolve(null) : fetchUserTeamAssignment(user.id, CURRENT_LEAGUE_SEASON).then((row) => row || fetchLatestUserTeamAssignment(user.id)),
     ]).then(async ([profileRow, assignmentRow]) => {
       if (!active) return;
       setProfile(profileRow);
@@ -54,7 +62,7 @@ export default function UserProfiles() {
       }
     }).catch((err: Error) => active && setError(err.message)).finally(() => active && setLoading(false));
     return () => { active = false; };
-  }, [user]);
+  }, [user,platformMode]);
 
   const email = profile?.email || user?.email || "No email available";
   const displayName = profile?.display_name?.trim() || email;
@@ -74,8 +82,8 @@ export default function UserProfiles() {
           <div className="min-w-0 flex-1">
             <h1 className="break-words text-xl font-semibold text-gray-800 dark:text-white/90">{displayName}</h1>
             <p className="mt-1 break-all text-sm text-gray-500 dark:text-gray-400">{email}</p>
-            <p className="mt-2 text-sm font-medium text-gray-700 dark:text-gray-300">{team ? team.team_name : "No FOBL team assigned"}</p>
-            {profile?.is_admin && <span className="mt-2 inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600 dark:bg-brand-500/15 dark:text-brand-300">League Admin</span>}
+            <p className="mt-2 text-sm font-medium text-gray-700 dark:text-gray-300">{platformMode ? "Front Office Baseball account" : team ? team.team_name : "No team assigned"}</p>
+            {(isPlatformAdmin || (!platformMode && membership?.role === "commissioner")) && <span className="mt-2 inline-flex rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600 dark:bg-brand-500/15 dark:text-brand-300">{isPlatformAdmin ? "Site Administrator" : "League Commissioner"}</span>}
           </div>
         </section>
 
@@ -91,9 +99,9 @@ export default function UserProfiles() {
             </div>
             <div className="mt-5 grid gap-3 sm:grid-cols-3">{finishesByPlacement.map(({ placement, years }) => <div key={placement} className={`rounded-lg border p-4 text-center ${medalStyles[placement]}`}><span className="text-2xl">{medalIcons[placement]}</span><p className="mt-1 text-lg font-semibold">{years.length}</p><p className="mt-1 text-xs font-medium">{years.length ? years.join(", ") : "—"}</p></div>)}</div>
           </div>
-        </section> : <section className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">Your account has not been assigned to a FOBL team yet.</section>}
+        </section> : <section className="rounded-xl border border-dashed border-gray-300 p-8 text-center text-sm text-gray-500 dark:border-gray-700 dark:text-gray-400">{platformMode ? <a href="/" className="font-semibold text-brand-500">View your teams and memberships in My Leagues →</a> : "Your account has not been assigned to a team in this league yet."}</section>}
 
-        <p className="text-xs text-gray-500 dark:text-gray-400">Display names and team assignments are managed by league administrators in Auction Admin.</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400">League display names and team assignments are managed by commissioners in User Admin.</p>
       </div>}
     </div>
   </>;

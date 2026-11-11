@@ -1,3 +1,4 @@
+import { POOLSTERS_LEAGUE_ID } from "./leagueIdentity";
 import { supabase } from "./supabase";
 import type { FantasyPlayer, PlayerSeasonWithRelations } from "./fantasyPlayers";
 import type { FantasyTeam } from "./fantasyTeams";
@@ -111,7 +112,7 @@ export async function fetchProspectRights(seasonYear: number) {
   const [prospectResult, callUpResult, fantasyTeamResult, draftResults] = await Promise.all([
     supabase
       .from("player_seasons")
-      .select("*, player:players(*), fantasy_team:fantasy_teams(*)")
+      .select("*, player:players(*), fantasy_team:fantasy_teams(*)").eq("league_id",POOLSTERS_LEAGUE_ID)
       .in("position", ["PROSPECT", "AP"])
       .not("fantasy_team_id", "is", null),
     supabase
@@ -119,7 +120,7 @@ export async function fetchProspectRights(seasonYear: number) {
       .select("season_year, action, player:players(*), fantasy_team:fantasy_teams(*)")
       .in("action", ["called_up", "signed"])
       .not("fantasy_team_id", "is", null),
-    supabase.from("fantasy_teams").select("*").eq("active", true),
+    supabase.from("fantasy_teams").select("*").eq("league_id",POOLSTERS_LEAGUE_ID).eq("active", true),
     Promise.all(draftYears.map(async (year) => ({ year, picks: await draftPicks(year) }))),
   ]);
   if (prospectResult.error) throw prospectResult.error;

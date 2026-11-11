@@ -1,3 +1,7 @@
+import { useLeagueRoute } from "../context/LeagueRouteContext";
+import { isPlatformPage } from "../lib/leagueIdentity";
+import { POOLSTERS_LEAGUE_ID } from "../lib/leagueIdentity";
+import { useLeague } from "../context/LeagueContext";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 
@@ -35,6 +39,7 @@ type NavItem = {
 };
 
 const leagueItems: NavItem[] = [
+  { icon: <DashboardIcon />, name: "My Leagues", path: "/" },
   {
     icon: <StandingsIcon />,
     name: "Standings",
@@ -165,8 +170,11 @@ const menuItems: Record<MenuType, NavItem[]> = {
 
 const AppSidebar: React.FC = () => {
   const { isExpanded, isMobileOpen, isHovered, setIsHovered, toggleMobileSidebar } = useSidebar();
-  const { isAdmin, user } = useAuth();
+  const { isAdmin, isPlatformAdmin, adminSetupPending, user } = useAuth();
+  const { membership, league } = useLeague();
   const location = useLocation();
+  const { basename } = useLeagueRoute();
+  const platformMode = isPlatformPage(basename,location.pathname);
 
   const [openSubmenu, setOpenSubmenu] = useState<{
     type: MenuType;
@@ -280,6 +288,28 @@ const AppSidebar: React.FC = () => {
             </button>
           ) : (
             nav.path && (
+              (["/", "/admin/users", "/admin/leagues"].includes(nav.path) ? (
+              <a
+                href={nav.path}
+                onClick={() => { if (isMobileOpen) toggleMobileSidebar(); }}
+                className={`menu-item group ${
+                  isActive(nav.path) ? "menu-item-active" : "menu-item-inactive"
+                }`}
+              >
+                <span
+                  className={`menu-item-icon-size ${
+                    isActive(nav.path)
+                      ? "menu-item-icon-active"
+                      : "menu-item-icon-inactive"
+                  }`}
+                >
+                  {nav.icon}
+                </span>
+                {(isExpanded || isHovered || isMobileOpen) && (
+                  <span className="menu-item-text">{nav.name}</span>
+                )}
+              </a>
+              ) : (
               <Link
                 to={nav.path}
                 onClick={() => { if (isMobileOpen) toggleMobileSidebar(); }}
@@ -300,6 +330,7 @@ const AppSidebar: React.FC = () => {
                   <span className="menu-item-text">{nav.name}</span>
                 )}
               </Link>
+              ))
             )
           )}
           {nav.subItems && (isExpanded || isHovered || isMobileOpen) && (
@@ -383,12 +414,12 @@ const AppSidebar: React.FC = () => {
           !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
         }`}
       >
-        <Link to="/" onClick={() => { if (isMobileOpen) toggleMobileSidebar(); }} className="flex items-center gap-3" aria-label="Front Office Baseball League home">
+        <a href="/" onClick={() => { if (isMobileOpen) toggleMobileSidebar(); }} className="flex items-center gap-3" aria-label="Front Office Baseball League home">
           <LeagueBrand compact={!isExpanded && !isHovered && !isMobileOpen} />
-        </Link>
+        </a>
       </div>
       <div className="no-scrollbar flex min-h-0 flex-1 touch-pan-y flex-col overflow-y-auto overscroll-contain pb-[calc(1.5rem+env(safe-area-inset-bottom))] duration-300 ease-linear [-webkit-overflow-scrolling:touch]">
-        <nav className="mb-6">
+        {platformMode ? <nav className="space-y-3"><a href="/" className="menu-item">My Leagues</a><a href="/profile" className="menu-item">My Account</a>{(isPlatformAdmin || (adminSetupPending && isAdmin)) && <><a href="/admin/leagues" className="menu-item">Site Administration</a><a href="/admin/users" className="menu-item">User Admin</a></>}{!isPlatformAdmin && membership?.role==='commissioner' && <a href="/admin/users" className="menu-item">User Admin</a>}</nav> : league.id !== POOLSTERS_LEAGUE_ID ? <nav className="space-y-3"><a href="/" className="menu-item">← My Leagues</a><p className="px-3 text-xs font-bold text-gray-400">{league.name}</p>{renderMenuItems([{icon:<DashboardIcon />,name:"Front Office",path:"/front-office"},{icon:<TeamsIcon />,name:"Teams",path:"/teams"},{icon:<PlayerAdminIcon />,name:"Roster & Contracts",path:"/contracts"}],"league")}{(isPlatformAdmin || membership?.role==='commissioner') && <a className="menu-item" href={`/admin/users?league=${league.id}`}>User Admin</a>}{isPlatformAdmin && <a className="menu-item" href="/admin/leagues">Site Administration</a>}</nav> : <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>
               <h2
@@ -399,7 +430,7 @@ const AppSidebar: React.FC = () => {
                 }`}
               >
                 {isExpanded || isHovered || isMobileOpen ? (
-                  "League"
+                  `${league.name} · League`
                 ) : (
                   <HorizontaLDots className="size-6" />
                 )}
@@ -434,6 +465,10 @@ const AppSidebar: React.FC = () => {
               </h2>
               {renderMenuItems(communityItems, "community")}
             </div>
+            {(isPlatformAdmin || (adminSetupPending && isAdmin) || membership?.role === "commissioner") && <div><h2 className="mb-3 text-xs uppercase text-gray-400">{isPlatformAdmin || (adminSetupPending && isAdmin) ? "Platform" : "Membership"}</h2>{renderMenuItems([
+              ...(isPlatformAdmin || (adminSetupPending && isAdmin) ? [{icon:<DashboardIcon />,name:"Site Administration",path:"/admin/leagues"}] : []),
+              {icon:<TeamAdminIcon />,name:"User Admin",path:"/admin/users"},
+            ], "admin")}</div>}
             {isAdmin && (
               <div>
                 <h2
@@ -469,7 +504,7 @@ const AppSidebar: React.FC = () => {
               {renderMenuItems(othersItems, "others")}
             </div>}
           </div>
-        </nav>
+        </nav>}
       </div>
     </aside>
   );

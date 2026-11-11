@@ -1,3 +1,4 @@
+import AppErrorBoundary from "./components/common/AppErrorBoundary";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "./index.css";
@@ -65,13 +66,15 @@ if (!hasSupabaseConfig) {
     .then(([{ default: App }, { AppWrapper }, { ThemeProvider }, { AuthProvider }]) => {
       root.render(
         <StrictMode>
-          <ThemeProvider>
-            <AuthProvider>
-              <AppWrapper>
-                <App />
-              </AppWrapper>
-            </AuthProvider>
-          </ThemeProvider>
+          <AppErrorBoundary>
+            <ThemeProvider>
+              <AuthProvider>
+                <AppWrapper>
+                  <App />
+                </AppWrapper>
+              </AuthProvider>
+            </ThemeProvider>
+          </AppErrorBoundary>
         </StrictMode>,
       );
     })

@@ -1,3 +1,5 @@
+import { useLeague } from "../../context/LeagueContext";
+import { leagueStorageKey, restoreLeagueScenario } from "../../lib/leagueIdentity";
 import PlayerPositionEligibility from "../../components/hockey/PlayerPositionEligibility";
 import { Link } from "react-router";
 import { availableLabFreeAgents, validTargetEstimate } from "../../lib/managerTargets";
@@ -53,6 +55,7 @@ function SummaryMetric({ label, value, detail, danger }: { label: string; value:
 
 export default function RosterLab() {
   const { user } = useAuth();
+  const { league } = useLeague();
   const targets = useManagerTargets();
   const [pendingTarget, setPendingTarget] = useState<ManagerTarget | null>(null);
   const userId = user?.id || null;
@@ -83,11 +86,12 @@ export default function RosterLab() {
   const [ufaRows, setUfaRows] = useState<LabRow[]>([]);
   const [scenarioDirty, setScenarioDirty] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
-  const storageKey = `front-office-baseball:roster-lab:${userId || "guest"}`;
+  const storageKey = leagueStorageKey("roster-lab", league.id, userId);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
+    setStorageReady(false);
     Promise.all([
       fetchFantasyTeams(),
       fetchPlayerSeasons(),
@@ -146,7 +150,7 @@ export default function RosterLab() {
       }));
       const preferred = assignment?.fantasy_team_id || teamRows[0]?.id || null;
       let saved: SavedLab | null = null;
-      try { saved = JSON.parse(window.localStorage.getItem(`front-office-baseball:roster-lab:${userId || "guest"}`) || "null") as SavedLab | null; } catch { saved = null; }
+      try { saved = JSON.parse(restoreLeagueScenario(window.localStorage, league.id, userId) || "null") as SavedLab | null; } catch { saved = null; }
       setRows(saved?.rows?.length ? cloneRows(saved.rows) : cloneRows(labRows));
       setAdjustments(saved?.adjustments?.length ? saved.adjustments.map((item) => ({ ...item })) : financialAdjustments);
       const restoredTeam = saved?.focusTeamId && teamRows.some((team) => team.id === saved?.focusTeamId) ? saved.focusTeamId : preferred;
@@ -155,7 +159,7 @@ export default function RosterLab() {
       setStorageReady(true);
     }).catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : "Unable to open the Roster Lab."); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [userId]);
+  }, [userId, league.id]);
 
   useEffect(() => {
     if (!storageReady) return;

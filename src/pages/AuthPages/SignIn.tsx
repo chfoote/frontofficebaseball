@@ -6,8 +6,8 @@ export default function SignIn() {
   return (
     <>
       <PageMeta
-        title="Poolsters Sign In | Front Office Baseball"
-        description="Sign in to the Poolsters dynasty league, hosted by Front Office Baseball."
+        title="Sign In | Front Office Baseball"
+        description="Sign in to view your Front Office Baseball leagues and teams."
       />
       <AuthLayout>
         <SignInForm />

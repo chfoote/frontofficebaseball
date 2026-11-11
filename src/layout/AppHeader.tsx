@@ -1,6 +1,9 @@
+import { useLeagueRoute } from "../context/LeagueRouteContext";
+import { isPlatformPage } from "../lib/leagueIdentity";
+import { useLeague } from "../context/LeagueContext";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Link, useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { useSidebar } from "../context/SidebarContext";
 import { ThemeToggleButton } from "../components/common/ThemeToggleButton";
 import NotificationDropdown from "../components/header/NotificationDropdown";
@@ -14,6 +17,10 @@ type SearchResult =
   | { type: "player"; key: string; label: string; detail: string; image: string | null; path: string };
 
 const AppHeader: React.FC = () => {
+  const { league } = useLeague();
+  const { basename } = useLeagueRoute();
+  const location = useLocation();
+  const platformMode = isPlatformPage(basename,location.pathname);
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -41,7 +48,8 @@ const AppHeader: React.FC = () => {
   const searchRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    Promise.all([fetchFantasyTeams(), fetchFantasyPlayers(), fetchPlayerSeasons()])
+    if(platformMode){setTeams([]);setPlayers([]);setLatestPlayerTeams(new Map());return;}
+    Promise.all([fetchFantasyTeams(false,league.id), fetchFantasyPlayers(), fetchPlayerSeasons(league.id)])
       .then(([teamRows, playerRows, seasonRows]) => {
         setTeams(teamRows);
         setPlayers(playerRows);
@@ -53,7 +61,7 @@ const AppHeader: React.FC = () => {
       .catch(() => {
         // Search remains available with whichever data was loaded successfully.
       });
-  }, []);
+  }, [league.id,platformMode]);
 
   const searchResults = useMemo<SearchResult[]>(() => {
     const term = query.trim().toLowerCase();
@@ -76,11 +84,11 @@ const AppHeader: React.FC = () => {
           label: player.full_name || [player.first_name, player.last_name].filter(Boolean).join(" ") || "Unknown Player",
           detail: latestTeam ? `${latestTeam.team_name} · Player` : "Free Agent · Player",
           image: latestTeam?.logo || null,
-          path: `/player-profile?playerId=${player.player_api_id}`,
+          path: league.id === "00000000-0000-4000-8000-000000000001" ? `/player-profile?playerId=${player.player_api_id}` : `/contracts?playerId=${player.id}`,
         };
       });
     return [...teamResults, ...playerResults];
-  }, [query, teams, players, latestPlayerTeams]);
+  }, [query, teams, players, latestPlayerTeams, league.id]);
 
   function chooseResult(result: SearchResult) {
     setQuery("");
@@ -156,13 +164,13 @@ const AppHeader: React.FC = () => {
             {/* Cross Icon */}
           </button>
 
-          <Link
-            to="/"
+          <a
+            href="/"
             className="flex items-center gap-2 lg:hidden"
             aria-label="Front Office Baseball League home"
           >
-            <LeagueBrand />
-          </Link>
+            <div><LeagueBrand /><p className="mt-1 text-[10px] font-semibold text-gray-500">{platformMode ? "Your account" : `${league.name} · ${league.current_season}`}</p></div>
+          </a>
 
           <button
             onClick={toggleApplicationMenu}
@@ -222,7 +230,7 @@ const AppHeader: React.FC = () => {
                       inputRef.current?.blur();
                     }
                   }}
-                  placeholder="Search players or teams..."
+                  disabled={platformMode} placeholder={platformMode ? "Choose a league to search players or teams" : "Search players or teams..."}
                   className="dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-200 bg-transparent py-2.5 pl-12 pr-14 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-800 dark:bg-gray-900 dark:bg-white/[0.03] dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800 xl:w-[430px]"
                 />
 
